@@ -8,11 +8,11 @@
 #              outputs: 
 #
 # Author:      Katsuhiko Ishiguro <k.ishiguro.jp@ieee.org>
-# 
-# 
-# License:     All rights reserved unless specified. 
-# Created:     20/12/2017 (DD/MM/YY)
-# Last update: 20/12/2017 (DD/MM/YY)
+#
+#
+# License:     All rights reserved unless specified.
+# Created:     08/01/2018 (DD/MM/YY)
+# Last update: 08/01/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io

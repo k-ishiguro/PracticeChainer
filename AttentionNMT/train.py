@@ -1,19 +1,26 @@
 # " -*- coding: utf-8 -*-"
 # -------------------------------------------------------------------------------
 # Name:        train.py
-# Purpose:     manually copied implementation of the chinear/example/mnist.
-#              a training part.
+# Purpose:     A Chainer implementation of Attent ion NMT: training script.
+#              based on the OpenNMT-py (pytorch) official implementations
 #
-#              inputs: 
+#              inputs:
+#              minibatches of tokenized training sequences: src/tgt.
+#              the lenght of sequences in the mini-batch must be a DESCENDING ORDER.
+#              vocabulray list: src/tgt
+#              output_prefix
 #
-#              outputs: 
+#              ToDo: add options to control network structure
+#
+#              outputs:
+#              trained NMT model
 #
 # Author:      Katsuhiko Ishiguro <k.ishiguro.jp@ieee.org>
-# 
-# 
-# License:     All rights reserved unless specified. 
-# Created:     19/12/2017 (DD/MM/YY)
-# Last update: 25/12/2017 (DD/MM/YY)
+#
+#
+# License:     All rights reserved unless specified.
+# Created:     08/01/2018 (DD/MM/YY)
+# Last update: 08/01/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 
