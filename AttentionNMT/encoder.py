@@ -12,7 +12,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     08/01/2018 (DD/MM/YY)
-# Last update: 11/01/2018 (DD/MM/YY)
+# Last update: 14/01/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -56,7 +56,13 @@ from chainer.training import extensions
 class Encoder(chainer.Chain):
     # A simple stacked LSTM encoder.
 
-    def __init__(self, n_layers=2, vocab_size=50000, w_vec_dim=500, lstm_dim=500):
+    n_layers = 2
+    vocab_size = 50000
+    w_vec_dim = 500
+    lstm_dim = 500
+    dropout = 0.3
+
+    def __init__(self, n_layers=2, vocab_size=50000, w_vec_dim=500, lstm_dim=500, dropout=0.3):
         '''
         initializer with parameters
 
@@ -64,6 +70,7 @@ class Encoder(chainer.Chain):
         :param vocab_size: vocabulary size
         :param w_vec_dim: dimension of word embedding
         :param lstm_dim: dimension (# of units) of the LSTM hidden vectors
+        :param drop_out: dropout ratio
         :return:
         '''
         self.name = "Encoder"
@@ -71,13 +78,23 @@ class Encoder(chainer.Chain):
 
         assert(n_layers > 0) # do not allow one-LSTM layer only.
 
+        # initialize size info
+        self.n_layers = n_layers
+        self.vocab_size = vocab_size
+        self.w_vec_dim = w_vec_dim
+        self.lstm_dim = lstm_dim
+
         # init scope for layer (modules) WITH parameters
         with self.init_scope():
 
-            self.lstm_layers = L.NStepLSTM(n_layers, w_vec_dim, lstm_dim)
+            self.word_embed = L.EmbedID(in_size=vocab_size, out_size=w_vec_dim)
+            self.lstm_layers = L.NStepLSTM(n_layers, w_vec_dim, lstm_dim, dropout=dropout)
 
         # end with
     # end init
+
+    def reset_state(self):
+        self.lstm_layers.reset_state()
 
     # wrapped the forward
     def __call__(self, x):
@@ -87,40 +104,20 @@ class Encoder(chainer.Chain):
         '''
         forward computation of the encoder
 
-        :param x:sequence(s) of word-embedded bectors
-        :return:sequence(s) of lstm_dim-dimensional hidden vectors at the top layer of LSTMs.
+        :param x: B-list of word index sequence, where B is the minibatch size
+        :return:  tuple of (h, c, y)
+                   h; all layer's hidden states at the of the sequence. B-list of n_layers by lstm_dim
+                   c: all layer's internal cell states at the end of the sequence. B-list of n_layers by lstm_dim
+                   y: top layer's hidden state sequence. B-list of seq_length x lstm_dim numpy array
         '''
-        h = self.lstm_layers(None, None, x) # LSTM stacks. initial states are zero.
-        return h
+
+        x_embed = self.word_embed(x)
+        h, c, y = self.lstm_layers(None, None, x_embed) # LSTM stacks. initial states are zero.
+
+        # h; all layer's hidden states at the of the sequence
+        # c: all layer's internal cell states at the end of the sqeucne
+        # y: top layer's hidden state sequence
+        return h, c, y
     # end def
 
 # end Encoder-classs
-
-class BrnnEncoder(chainer.Chain):
-    """"""
-    # Stacked LSTM + bi-directional at the first layer
-
-    """Constructor for BrnnEncoder"""
-    def __init__(self, ):
-        self.name = "Encoder"
-        super(BrnnEncoder, self).__init__()
-
-        # TODO: copy rom Encoder, modify it
-    # end init
-
-    # wrapped the forward
-    def __call__(self, w_seq):
-        return self.forward(w_seq)
-
-    def forward(self, w_seq):
-        '''
-        forward computation of the encoder
-
-        :param w_seq:sequence(s) of one-hot vectors
-        :return:sequence(s) of lstm_dim-dimensional hidden vectors at the top layer of LSTMs.
-        '''
-        # TODO: copy rom Encoder, modify it
-    # end def
-
-
-# Bidirectional RNN for the first layer only
