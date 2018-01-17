@@ -147,7 +147,7 @@ class SimpleAttentionNMT(chainer.Chain):
                 if t > 0:
                     input_tokens_at_t_list.append(tgt[b][t-1])
                 else:
-                    input_tokens_at_t_list.append(EOS_ID)
+                    input_tokens_at_t_list.append(EOSID)
                 # end if-else
                 tgt_tokens_at_t_list.append(tgt[b][t])
                 b = b + 1
