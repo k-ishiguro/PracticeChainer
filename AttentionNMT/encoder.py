@@ -12,7 +12,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     08/01/2018 (DD/MM/YY)
-# Last update: 14/01/2018 (DD/MM/YY)
+# Last update: 18/01/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -104,7 +104,7 @@ class Encoder(chainer.Chain):
         '''
         forward computation of the encoder
 
-        :param x: B-list of word index sequence, where B is the minibatch size
+        :param x: chainer Variable, consists of B-list of word index sequence, where B is the minibatch size
         :return:  tuple of (h, c, y)
                    h; all layer's hidden states at the of the sequence. B-list of n_layers by lstm_dim
                    c: all layer's internal cell states at the end of the sequence. B-list of n_layers by lstm_dim

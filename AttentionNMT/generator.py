@@ -11,7 +11,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     13/01/2018 (DD/MM/YY)
-# Last update: 13/01/2018 (DD/MM/YY)
+# Last update: 24/01/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -84,12 +84,8 @@ class Generator(chainer.Chain):
         compute the log probability of soft-max vector.
 
         :param h: B by hidden_dim-dim numpy array, An incoming (possibly augmented) decoder hidden state wehre B is the size of minibatch
-        :return: B-lsit of log p(y_t = w). B by vocab_size-dim numpy array.
+        :return: B-list of log p(y_t = w). B by vocab_size-dim numpy array.
         """
-
-        (B, D) = np.shape(h)
-        print("Generator.__call()__: N=" + str(B) + " D=" + str)
-        assert( D == self.hidden_dim )
 
         Wh = self.W(h)
         p_yt = F.log_softmax(Wh) # should be (B x V)

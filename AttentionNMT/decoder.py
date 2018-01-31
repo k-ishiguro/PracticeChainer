@@ -10,7 +10,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     08/01/2018 (DD/MM/YY)
-# Last update: 10/01/2018 (DD/MM/YY)
+# Last update: 24/01/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -48,8 +48,6 @@ import matplotlib
 import chainer
 import chainer.functions as F
 import chainer.links as L
-from chainer import training
-from chainer.training import extensions
 
 
 class Decoder(chainer.Chain):
@@ -139,25 +137,20 @@ class Decoder(chainer.Chain):
         '''
         forward computation of the encoder
 
-        :param y: B-dim numpy array. B-list of word ID indices, where B is the size of minibatch
+        :param y: chainer Variable, consists of B-dim numpy array. B-list of word ID indices, where B is the size of minibatch
         :return: h: hidden state of the top LSTM layer, B by lstm_dim-dim numpy array
-                  hs: hidden states of the all LSTM layers (bottom to top) B by n_layers x lstm_dim numpy array
         '''
 
         # embedding
         x = self.word_embed(y)
 
         # hidden states of each layer
-        B = len(y)
-        hs = np.zeros(B,  self.n_layers, self.lstm_dim)
-        h = np.zeros(B, self.lstm_dim)
         for l in range(self.n_layers):
             h = self.lstm_layers[l](x)
             x = h
-            hs[:, l, :] = np.reshape(h, (B, 1, self.lstm_dim))
         # end l-for
 
-        return h, hs
+        return h
     # end def
 
 # end Decoder-classs

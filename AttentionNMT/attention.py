@@ -13,7 +13,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     13/01/2018 (DD/MM/YY)
-# Last update: 13/01/2018 (DD/MM/YY)
+# Last update: 24/01/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -51,22 +51,29 @@ import matplotlib
 import chainer
 import chainer.functions as F
 import chainer.links as L
-from chainer import training
-from chainer.training import extensions
+from chainer import cuda
 
 class GlobalAttention(chainer.Chain):
     """
     Luong+ (EMNLP 2015)-type "simple" attention, as adopted in OpenNMT and OpenNMT-py
     """
 
-    def __init__(self, lstm_dim):
+    def __init__(self, lstm_dim, gpu):
         """
         initializer.
 
         :param lstm_dim: dimension of the hidden states,
+        :param gpu: gpu id
         :return: no returns.
         """
         super(GlobalAttention, self).__init__()
+
+        self.lstm_dim = lstm_dim
+        global xp
+        if gpu >= 0:
+            xp = cuda.cupy
+        else:
+            xp = np
 
         # init scope for layer (modules) WITH parameters <-- to detect by backward/optimizer/updater?
         with self.init_scope():
@@ -79,31 +86,24 @@ class GlobalAttention(chainer.Chain):
         """
         compute the context vector.then augment the decoder hidden state with the context vector
 
-        :param xs: B-list of N by D numpy array, B-list of sequences (list, array) of encoder hidden states, B is the minibatch size
-        :param h: B by D numpy array, B-list of the decoder hidden state of the focused time step
+        :param xs: chainer Variable consists of B-list of N by D numpy array, B-list of sequences (list, array) of encoder hidden states, B is the minibatch size
+        :param h: chaienr Variable, consists of B by D numpy array, B-list of the decoder hidden state of the focused time step
         :return: B-list of augmented decoder hidden sate w/ context vector. B by D*2-dim numpy array,
         """
         B = len(xs)
-        (N, D) = np.shape(xs[0])
-        augmented_dec = np.zeros( (B, D) )
+        augmented_dec = xp.zeros( (B, self.lstm_dim) )
         for b in B:
-            (N, D) = np.shape(xs[b])
-            print("Global attention.__call()__: B=" + str(B) + " N=" + str(N) + " D=" + str)
-            assert( len(h) == D )
 
             # compute the attention similarities between xs and h
             Wh = self.W(h[b])
-            xWh = np.dot(xs[b], Wh) # should be (N x 1)
+            xWh = xp.dot(xs[b], Wh) # should be (N x 1)
             attention = F.softmax(xWh) # should be (N x 1)
-            print("Global attention.__call()__: np.shape(attention)=" + str(np.shape(attention)))
 
             # weighted sum of xs.
-            context_vec = np.reshape(np.dot(xs[b].T, attention), (D) ) # should be (D)
-            print("Global attention.__call()__: np.shape(context_vec)=" + str(np.shape(context_vec)))
+            context_vec = xp.reshape(xp.dot(xs[b].T, attention), (self.lstm_dim) ) # should be (D)
 
             # concat and nonlinear transform
-            concated_vec = np.hstack(h[b], context_vec)
-            print("Global attention.__call()__: np.shape(concated_vec)=" + str(np.shape(concated_vec)))
+            concated_vec = xp.hstack(h[b], context_vec)
 
             augmented_dec[b, :] = F.tanh( self.C(concated_vec) )
 
