@@ -7,8 +7,10 @@
 #              required inputs:
 #              serialized object, containing lists of tokenized training sequences (source, target) and vocabulary dictionaries (source, target)
 #              output_prefix
-#              Note all sequences are sorted by the TARGET token length in descending order (handled by preprocess.py)
-#
+#              Note:
+#                all sequences are sorted by the TARGET token length in descending order (handled by preprocess.py)
+#                all target seqeucnes end with <EOS>. 
+#   
 #              ToDo: add options to control network structure
 #
 #              outputs:
@@ -21,7 +23,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     19/01/2018 (DD/MM/YY)
-# Last update: 24/01/2018 (DD/MM/YY)
+# Last update: 01/02/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 
@@ -50,7 +52,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib import rcParams
 
-rcParams['font.family'] = 'IPAGothic'
+#rcParams['font.family'] = 'IPAGothic'
 
 # import pandas as pd
 # from pandas import Series, DataFrame
@@ -64,7 +66,7 @@ from chainer.training import extensions
 from chainer import serializers
 from chainer import cuda
 
-from . import nmt_model
+import nmt_model
 
 def getID(vocab_dict, token_str):
     """
@@ -77,22 +79,22 @@ def getID(vocab_dict, token_str):
 
     return vocab_dict[token_str]
 
-def make_datatuples(src_pckl, tgt_pckl):
+def make_datatuples(src_list, tgt_list):
     """
-    load the src/tgt sequence list (pickled), then zip them, return as a list of tuples (src_seq, tgt_seq)
-    :param src_pckl: file path to source sequence list pickle
-    :param tgt_pckl: file path to source sequence list pickle
+    load the src/tgt sequence list, then zip them, return as a list of tuples (src_seq, tgt_seq)
+    :param src_list: list of source sequences
+    :param tgt_list: list of target sequences 
     :return: a list of tuples, each element is (src_seq, tgt_seq)
     """
 
-    # load pickle
-    src_seqs = pickle.load(src_pckl)
-    tgt_seqs = pickle.load(tgt_pckl)
+    assert(len(src_list) == len(tgt_list))
 
-    assert(len(src_seqs) == len(tgt_seqs))
+    # pair them
+    out_tuples = []
+    for (s, t) in zip(src_list, tgt_list):
+        out_tuples.append( (s, t) )
 
-    # zip them
-    return zip(src_seqs, tgt_seqs)
+    return out_tuples
 # end make_datatuples-def
 
 def minibatchToListTuple(train_batch, gpuid):
@@ -104,15 +106,29 @@ def minibatchToListTuple(train_batch, gpuid):
 
     :param train_batch:list of (src seq., tgt seq.) tuples.
     :param gpuid: 0 if CPU, else GPU
-    :return:Chainer Variables which are lists of src seqeunces and tgt sequecnes
+    :return: lsit of Chainer Variables, wehre each Variable is a seqeunce
     """
 
     src_list, tgt_list = zip(*train_batch)
+    
+    ### for DEBUG ###
+    print(type(src_list))
+    print(type(src_list[1]))
+    print(src_list[1])
+    print(tgt_list[1])
+    print(len(src_list))
+    ### for DEBUG ###
 
-    src_list = chainer.Variable(xp.array(src_list, dtype=xp.float32))
-    tgt_list = chainer.Variable(xp.array(src_list, dtype=xp.float32))
+    src_list_of_array = [ xp.array(x, dtype=xp.float32) for x in src_list  ]
+    tgt_list_of_array = [ xp.array(x, dtype=xp.float32) for x in tgt_list  ]
 
-    return src_list, tgt_list
+    ### for DEBUG ###
+    print(type(src_list_of_array))
+    print(type(src_list_of_array[1]))
+    print(src_list_of_array[1])
+    ### for DEBUG ###
+
+    return src_list_of_array, tgt_list_of_array
 
 def main(args):
     """
@@ -124,28 +140,35 @@ def main(args):
                - vocabulary dictionaries of source and target
     """
 
+    print("################")
+    print("setting up the data and model")
+    print("################")
 
     ###
     # load the training data. target side sentences end with <EOS>.
     ###
-    (train_src, train_tgt, valid_src, valid_tgt, src_vocab_dictionary, tgt_vocab_dictionary) = pickle.load(args.data)
+    with open(args.data, 'rb') as fin:
+        (train_src, train_tgt, valid_src, valid_tgt, src_vocab_dictionary, tgt_vocab_dictionary) = pickle.load(fin)
+    # end open-with
 
     train_tuples = make_datatuples(train_src, train_tgt)
     valid_tuples = make_datatuples(valid_src, valid_tgt)
+    print("training data pickle: " + str(args.data) + " loaded. ")
+    print("vocabulary size= " + str(len(src_vocab_dictionary)) + "(src), " + str(len(tgt_vocab_dictionary)) + "(tgt)")
+    print("sample size= " + str(len(train_tuples)) + "(training), " + str(len(valid_tuples)) + "(valid)")
+
+    
 
     # just a iterators, but is able to repeat and shuffle.
     train_iter = chainer.iterators.SerialIterator(train_tuples, args.batchsize)
     valid_iter = chainer.iterators.SerialIterator(valid_tuples, args.batchsize, repeat=False, shuffle=False)
 
-    print("training data pickle " + str(args.data) + " loaded. ")
-    print("vocabulary size= " + str(len(src_vocab_dictionary)) + "(src), " + str(len(tgt_vocab_dictionary)) + "(tgt)")
-    print("sample size= " + str(len(train_tuples)) + "(training), " + str(len(valid_tuples)) + "(valid)")
-    print("minibathces: size=" + str(args.batchsize) + " number=" + str(len(train_iter)) )
+    print("minibathces: size=" + str(args.batchsize))
 
     ###
     # set up the network, optimizer, loss etc
     ###
-
+    print("setting the model up...")
     model = nmt_model.SimpleAttentionNMT(args.n_layers,len(src_vocab_dictionary), len(src_vocab_dictionary), args.w_vec_dim, args.lstm_dim, args.dropout, args.gpu)
 
     global xp
@@ -156,13 +179,14 @@ def main(args):
     else:
         xp = np
     # end args.gpu-if
-    print("model set up. ")
+    print("model set up complete. ")
 
     # set up the optimizer with gradient clipping
     optimizer = chainer.optimizers.SGD(lr=args.learning_rate)
-    optimizer.add_hook(chainer.optimizer.GradientClipping(5.0))
     optimizer.setup(model)
-    print("optimizer: SGD")
+    optimizer.add_hook(chainer.optimizer.GradientClipping(5.0))
+    print("optimizer: SGD, leargning rate=" + str(optimizer.lr))
+    
 
     ###
     # Training loop
@@ -170,6 +194,9 @@ def main(args):
     learning_rate = args.learning_rate
     former_valid_loss = -1234567890.0
 
+    print("################")
+    print("start training...")
+    print("################")
     # for each epoch
     for epoch in range(args.epoch):
         # iterate training minibatches
@@ -178,8 +205,10 @@ def main(args):
         # reshape the data into (src list) and (tgt list), then transfer to gpu if necessary
         src_list, tgt_list = minibatchToListTuple(train_batch, args.gpu)
 
+        # src_list should be a list of Variable, where each Variable is a source sequence
+
         # compute the loss
-        loss = model.forward_train(src_list, tgt_list, getID(tgt_vocab_dictionary, 'BOS'))
+        loss = model.forward_train(src_list, tgt_list, getID(tgt_vocab_dictionary, '<BOS>'))
 
         # back-prop by auto differential
         model.cleargrads()
@@ -200,7 +229,7 @@ def main(args):
                 val_src_list, val_tgt_list = minibatchToListTuple(valid_batch, args.gpu)
 
                 # forward: cross entropy as validation loss
-                val_loss = model.forward_train(val_src_list, val_tgt_list, getID(tgt_vocab_dictionary, 'BOS'))
+                val_loss = model.forward_train(val_src_list, val_tgt_list, getID(tgt_vocab_dictionary, '<BOS>'))
                 valid_losses.append( val_loss.data )
 
             # end true-while

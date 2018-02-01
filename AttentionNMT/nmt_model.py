@@ -11,7 +11,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     14/01/2018 (DD/MM/YY)
-# Last update: 24/01/2018 (DD/MM/YY)
+# Last update: 01/02/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -53,7 +53,7 @@ from chainer import training
 from chainer.training import extensions
 from chainer import cuda
 
-from . import encoder, decoder, attention, generator
+import encoder, decoder, attention, generator
 
 class SimpleAttentionNMT(chainer.Chain):
     """
@@ -125,15 +125,14 @@ class SimpleAttentionNMT(chainer.Chain):
         forward computation for training. given B pairs of source seq. and target seq,
         compute the log likelihood of the tgt sequence, then return cross entropy loss.
 
-        :param src: chainer Variable consists of B-list of ID sequences (numpy array) of source inputs, where B is the minibatch size.
-        :param tgt: chainer Variable consists of B-list of ID sequences (numpy array) of corresponding target inputs.
+        :param src: B-list of chainer Variable, is a B-list of ID sequences (numpy array) of source inputs, where B is the minibatch size.
+        :param tgt: B-list of chainer Variable, is a B-list of ID sequences (numpy array) of corresponding target inputs.
                      Lengths of sequences must be sorted in descending order (for F.LSTM in decoder)
         :param BOSID: integer, token ID of Target's BOS token
         :return: the cross entropy loss on p(Y | X)
         """
 
         # forward the encoder with the entire sequence
-        self.encoder.reset_state()
         hs, cs, xs = self.encoder.forward(src)
 
         # given the encoder states, initialize the decoder. each network memorizes (at most) B rnn histories.

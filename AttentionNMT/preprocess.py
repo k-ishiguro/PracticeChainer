@@ -304,7 +304,9 @@ def main(args):
     # dump
     ###
     out_tuple = (train_src_id, train_tgt_id, val_src_id, val_tgt_id, src_vocab_dictionary, tgt_vocab_dictionary)
-    with open(args.out_prefix + ".traindata.pckl", "w") as fout:
+    out_name = args.out_prefix + ".traindata.pckl"
+    print("preprocess.py: dump the pickled data to: " + out_name)
+    with open(out_name, "wb") as fout:
         pickle.dump(out_tuple, fout)
     # end with-open
 

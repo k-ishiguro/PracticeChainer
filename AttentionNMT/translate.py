@@ -157,7 +157,7 @@ def main(args):
 
             # translate
             # TODO: change to decode_translate_beam
-            tgt_IDseq, log_lk = model.decode_translate_greedy(src_IDseq, args.max_tgt_length, getID(tgt_vocab_dictionary, 'BOS'), getID(tgt_vocab_dictionary, 'EOS'))
+            tgt_IDseq, log_lk = model.decode_translate_greedy(src_IDseq, args.max_tgt_length, getID(tgt_vocab_dictionary, '<BOS>'), getID(tgt_vocab_dictionary, '<EOS>'))
 
             # convert back to the target words
             tgt_line = convertToWordSequence(tgt_vocab_dictionary, tgt_IDseq)
