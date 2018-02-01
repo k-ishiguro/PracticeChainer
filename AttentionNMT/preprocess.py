@@ -9,7 +9,7 @@
 #              a text file for tgt-training corpus, one line one sequence, tokenized by spaces.
 #              a text file for src-validation corpus, one line one sequence, tokenized by spaces.
 #              a text file for tgt-validation corpus, one line one sequence, tokenized by spaces.
-#              output_prefix
+#              out_prefix
 #
 #              Special tokens forced to included in the dictionary:
 #              <BOS> - beginning of sentence
@@ -33,7 +33,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     29/01/2018 (DD/MM/YY)
-# Last update: 29/01/2018 (DD/MM/YY)
+# Last update: 01/02/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 
@@ -94,14 +94,14 @@ def rearrangeLists(input_src_list, input_tgt_list, max_sentence_length):
         bucket.append([])
 
     for l in range( len(input_tgt_list) ):
-        len_tgt = len(input_tgt_list)
+        len_tgt = len(input_tgt_list[l])
         bucket[len_tgt].append(l)
     # end for
 
     # sanity check
     sum_bucket = 0
-    for i in range(len(bucket)):
-        sum_bucket = sum_bucket + len(bucket[l])
+    for bucket_i in bucket:
+        sum_bucket = sum_bucket + len(bucket_i)
     assert(sum_bucket == len(input_tgt_list))
 
 
@@ -118,7 +118,7 @@ def rearrangeLists(input_src_list, input_tgt_list, max_sentence_length):
         # end i-for
     # end l-for
 
-    return out_src_list. out_tgt_list
+    return out_src_list, out_tgt_list
 # emd filterList-def
 
 
@@ -139,11 +139,11 @@ def filterLists(input_src_list, input_tgt_list, max_sentence_length):
     for l in range( len(input_src_list) ):
         if len(input_src_list[l]) < 1:
             pass
-        elif len(input_src_list[l]) > max_sentence_length:
+        elif len(input_src_list[l]) > max_sentence_length - 1: #-1 for EOS
             pass
         if len(input_tgt_list[l]) < 1:
             pass
-        elif len(input_tgt_list[l]) > max_sentence_length:
+        elif len(input_tgt_list[l]) > max_sentence_length - 1: #-1 for EOS
             pass
         else:
             out_src_list.append(input_src_list[l])
@@ -151,7 +151,7 @@ def filterLists(input_src_list, input_tgt_list, max_sentence_length):
         # end if-else
     # end for
 
-    return out_src_list. out_tgt_list
+    return out_src_list, out_tgt_list
 # emd filterList-def
 
 def convertToIDs(input_file, vocab_dict):
@@ -172,17 +172,16 @@ def convertToIDs(input_file, vocab_dict):
             line = line.rstrip()
             tokens = line.split()
             for token in tokens:
-                if vocab_dict.has_key(token):
+                if token in vocab_dict:
                     out_list_line.append(vocab_dict[token])
                 else:
                     out_list_line.append(vocab_dict["<UNK>"])
-                # end has_key-ifelse
+                # end token-in-ifelse
             # end token-for
 
-            out_list_line.append()
-            #out_list_line.append(vocab_dict["<EOS>"])
             # end of line
-
+            #out_list_line.append(vocab_dict["<EOS>"])
+            
             out_list.append(out_list_line)
             # go next.
             line = fin.readline()
@@ -212,11 +211,11 @@ def make_vocabulary(input_file, max_vocab_size, output_file):
             line = line.rstrip()
             tokens = line.split()
             for token in tokens:
-                if freq_dict.has_key(token):
+                if token in freq_dict:
                     freq_dict[token] = freq_dict[token] + 1
                 else:
                     freq_dict[token] = 1
-                # end has_key-ifelse
+                # end token-in-ifelse
             # end token-for
             line = fin.readline()
         # end line-while
@@ -227,7 +226,7 @@ def make_vocabulary(input_file, max_vocab_size, output_file):
     vocab_dict = {}
     with open(output_file, "w") as fout:
         for k, v in sorted(freq_dict.items(), key=lambda x: -x[1]):
-            fout.writet(str(k) + "\t" + str(v) + "\n")
+            fout.write(str(k) + "\t" + str(v) + "\n")
             vocab_dict[k] = numElement
 
             numElement = numElement + 1
@@ -267,8 +266,8 @@ def main(args):
     # make vocabulary dictionaries
     ###
     print("making vocabulary dictionaries...")
-    src_vocab_dictionary = make_vocabulary(args.train_src, args.src_vocab_size, args.output_prefix+".src.vocab")
-    tgt_vocab_dictionary = make_vocabulary(args.train_tgt, args.src_vocab_size, args.output_prefix+".tgt.vocab")
+    src_vocab_dictionary = make_vocabulary(args.train_src, args.src_vocab_size, args.out_prefix+".src.vocab")
+    tgt_vocab_dictionary = make_vocabulary(args.train_tgt, args.src_vocab_size, args.out_prefix+".tgt.vocab")
 
     ###
     # read the training parallel corpus, replace with token ids, attach EOS.
@@ -305,7 +304,7 @@ def main(args):
     # dump
     ###
     out_tuple = (train_src_id, train_tgt_id, val_src_id, val_tgt_id, src_vocab_dictionary, tgt_vocab_dictionary)
-    with open(args.output_prefix + ".traindata.pckl", "w") as fout:
+    with open(args.out_prefix + ".traindata.pckl", "w") as fout:
         pickle.dump(out_tuple, fout)
     # end with-open
 
