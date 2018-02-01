@@ -8,7 +8,7 @@
 #
 #              outputs: 
 #
-# Author:      Katsuhiko Ishiguro <ishiguro.katsuhiko@lab.ntt.co.jp>
+# Author:      Katsuhiko Ishiguro <k.ishiguro.jp@ieee.org>
 # 
 # 
 # License:     All rights reserved unless specified. 

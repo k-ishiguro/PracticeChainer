@@ -1,13 +1,13 @@
 # " -*- coding: utf-8 -*-"
 # -------------------------------------------------------------------------------
-# Name:        test.py
+# Name:        translate.py
 # Purpose:     manually written test code for chaner/example/mnist
 #
 #              inputs: 
 #
 #              outputs: 
 #
-# Author:      Katsuhiko Ishiguro <ishiguro.katsuhiko@lab.ntt.co.jp>
+# Author:      Katsuhiko Ishiguro <k.ishiguro.jp@ieee.org>
 # 
 # 
 # License:     All rights reserved unless specified. 
