@@ -106,7 +106,7 @@ def minibatchToListTuple(train_batch, gpuid):
 
     :param train_batch:list of (src seq., tgt seq.) tuples.
     :param gpuid: 0 if CPU, else GPU
-    :return: lsit of Chainer Variables, wehre each Variable is a seqeunce
+    :return: src_list: list of (len-seq) numpy array.
     """
 
     src_list, tgt_list = zip(*train_batch)
@@ -204,8 +204,6 @@ def main(args):
 
         # reshape the data into (src list) and (tgt list), then transfer to gpu if necessary
         src_list, tgt_list = minibatchToListTuple(train_batch, args.gpu)
-
-        # src_list should be a list of Variable, where each Variable is a source sequence
 
         # compute the loss
         loss = model.forward_train(src_list, tgt_list, getID(tgt_vocab_dictionary, '<BOS>'))

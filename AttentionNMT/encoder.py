@@ -50,19 +50,14 @@ import matplotlib
 import chainer
 import chainer.functions as F
 import chainer.links as L
+from chainer import cuda
 from chainer import training
 from chainer.training import extensions
 
 class Encoder(chainer.Chain):
     # A simple stacked LSTM encoder.
 
-    n_layers = 2
-    vocab_size = 50000
-    w_vec_dim = 500
-    lstm_dim = 500
-    dropout = 0.3
-
-    def __init__(self, n_layers=2, vocab_size=50000, w_vec_dim=500, lstm_dim=500, dropout=0.3):
+    def __init__(self, n_layers=2, vocab_size=50000, w_vec_dim=500, lstm_dim=500, dropout=0.3, gpu=0):
         '''
         initializer with parameters
 
@@ -71,6 +66,7 @@ class Encoder(chainer.Chain):
         :param w_vec_dim: dimension of word embedding
         :param lstm_dim: dimension (# of units) of the LSTM hidden vectors
         :param drop_out: dropout ratio
+        :param gpu: gpu index. if 0, use cpu
         :return:
         '''
         self.name = "Encoder"
@@ -83,6 +79,12 @@ class Encoder(chainer.Chain):
         self.vocab_size = vocab_size
         self.w_vec_dim = w_vec_dim
         self.lstm_dim = lstm_dim
+
+        global xp
+        if gpu >= 0:
+            xp = cuda.cupy
+        else:
+            xp = np
 
         # init scope for layer (modules) WITH parameters
         with self.init_scope():
@@ -104,14 +106,20 @@ class Encoder(chainer.Chain):
         '''
         forward computation of the encoder
 
-        :param x: chainer Variable, consists of B-list of word index sequence, where B is the minibatch size
+        :param x: B-list of numpy arrays, is a B-list of word ID sequences of source inputs, B is a mini-batch size
         :return:  tuple of (h, c, y)
                    h; all layer's hidden states at the of the sequence. B-list of n_layers by lstm_dim
                    c: all layer's internal cell states at the end of the sequence. B-list of n_layers by lstm_dim
                    y: top layer's hidden state sequence. B-list of seq_length x lstm_dim numpy array
         '''
 
-        x_embed = self.word_embed(x)
+        x_embed = []
+        for x_s in x:
+            x_s_list = [self.word_embed(x_st) for x_st in x_s  ]
+            x_embed.append( chainer.Variable( xp.asarray(x_s_list) )  )
+        # end x-for
+
+        # x_embed must be a list of Variable, where each Variable corresponds to a sequence ( of embedded vectors)
         h, c, y = self.lstm_layers(None, None, x_embed) # LSTM stacks. initial states are zero.
 
         # h; all layer's hidden states at the of the sequence

@@ -93,7 +93,7 @@ class SimpleAttentionNMT(chainer.Chain):
         # init scope for layer (modules) WITH parameters <-- to detect by backward/optimizer/updater?
         with self.init_scope():
             # ID sequences are fed into the encoder, hidden vector sequences are emitted.
-            self.encoder = encoder.Encoder(n_layers, src_vocab_size, w_vec_dim, lstm_dim, dropout)
+            self.encoder = encoder.Encoder(n_layers, src_vocab_size, w_vec_dim, lstm_dim, dropout, gpu)
 
             # ID sequences and encoder hidden vector sequences are fed into the decoder, hidden vector sequences are emitted
             self.decoder = decoder.Decoder(n_layers, tgt_vocab_size, w_vec_dim, lstm_dim)
@@ -125,7 +125,7 @@ class SimpleAttentionNMT(chainer.Chain):
         forward computation for training. given B pairs of source seq. and target seq,
         compute the log likelihood of the tgt sequence, then return cross entropy loss.
 
-        :param src: B-list of chainer Variable, is a B-list of ID sequences (numpy array) of source inputs, where B is the minibatch size.
+        :param src: B-list of (len-seq) numpy array, is a B-list of ID sequences of source inputs, where B is the minibatch size.
         :param tgt: B-list of chainer Variable, is a B-list of ID sequences (numpy array) of corresponding target inputs.
                      Lengths of sequences must be sorted in descending order (for F.LSTM in decoder)
         :param BOSID: integer, token ID of Target's BOS token
