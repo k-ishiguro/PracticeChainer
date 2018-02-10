@@ -10,7 +10,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     08/01/2018 (DD/MM/YY)
-# Last update: 24/01/2018 (DD/MM/YY)
+# Last update: 05/02/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -48,7 +48,7 @@ import matplotlib
 import chainer
 import chainer.functions as F
 import chainer.links as L
-
+from chainer import cuda
 
 class Decoder(chainer.Chain):
     # A simple Stacked-LSTM attention decoder
@@ -59,7 +59,7 @@ class Decoder(chainer.Chain):
     lstm_dim = 500
     dropout = 0.3
 
-    def __init__(self, n_layers=2, vocab_size=50000, w_vec_dim=500, lstm_dim=500):
+    def __init__(self, n_layers=2, vocab_size=50000, w_vec_dim=500, lstm_dim=500, gpu=0):
         '''
         initializer with parameters
 
@@ -68,6 +68,7 @@ class Decoder(chainer.Chain):
         :param w_vec_dim: dimension of word embedding
         :param lstm_dim: dimension (# of units) of the LSTM hidden vectors
         :param dropout: dropout ratio for LSTM
+        :param gpu: gpu id, if 0, CPU use, 
         :return:
         '''
         self.name = "Decoder"
@@ -80,6 +81,13 @@ class Decoder(chainer.Chain):
         self.vocab_size = vocab_size
         self.w_vec_dim = w_vec_dim
         self.lstm_dim = lstm_dim
+
+        global xp
+        if gpu >= 0:
+            xp = cuda.cupy
+        else:
+            xp = np
+
 
         # init scope for layer (modules) WITH parameters
         with self.init_scope():
@@ -113,36 +121,33 @@ class Decoder(chainer.Chain):
         """
         set the encoder's final hidden state as the decoder's init
 
-        :param c: B-list of n_layer by lstm_dim numpy array. all layer's cell state initial values where B is the size of minibatch
-        :param h: B-list of n_layer by lstm_dim numpy array, all layer's hidden state initial values
+        :param c: chainer Variable, is a n_layer by B by lstm_dim numpy array. all layer's cell state initial values where B is the size of minibatch
+        :param h: chainer Variable, is a n_layer by B by lstm_dim numpy array, all layer's hidden state initial values
         :return: no return
         """
 
-        assert(len(h[0]) == self.n_layers)
-        assert(len(c[0]) == self.n_layers)
+        assert(len(h) == self.n_layers)
+        assert(len(c) == self.n_layers)
 
-        B = len(h)
+        B = len(h[0])
+        assert(B == len(c[0]))
 
-        for l in range(self.n_layers):
-            cl = np.zeros( B, self.lstm_dim )
-            hl = np.zeros( B, self.lstm_dim )
-            for b in range(B):
-                cl[b, :] = c[b][l, :]
-                hl[b, :] = h[b][l, :]
-
-            self.lstm_layers[l].set_state(cl, hl)
+        for l in range(self.n_layers): # for each layer
+            self.lstm_layers[l].set_state(c[l], h[l])
     # end decoder_init-def
 
     def onestep_forward(self, y):
         '''
         forward computation of the encoder
 
-        :param y: chainer Variable, consists of B-dim numpy array. B-list of word ID indices, where B is the size of minibatch
+        :param y: B-dim numpy array. B-list of word ID indices, where B is the size of minibatch
         :return: h: hidden state of the top LSTM layer, B by lstm_dim-dim numpy array
         '''
 
         # embedding
-        x = self.word_embed(y)
+        x = self.word_embed(y) # return Variable
+
+        # x should be a Variable, consists of B by lstm_dim numpy array. 
 
         # hidden states of each layer
         for l in range(self.n_layers):

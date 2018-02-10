@@ -11,7 +11,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     13/01/2018 (DD/MM/YY)
-# Last update: 24/01/2018 (DD/MM/YY)
+# Last update: 11/02/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -54,10 +54,6 @@ from chainer.training import extensions
 
 class Generator(chainer.Chain):
 
-    hidden_dim = 1000
-    vocab_size = 50000
-    dropout = 0.3
-
     def __init__(self, hidden_dim=1000, vocab_size=50000, dropout=0.3):
         """
         initializer.
@@ -89,7 +85,6 @@ class Generator(chainer.Chain):
 
         Wh = self.W(h)
         p_yt = F.log_softmax(Wh) # should be (B x V)
-        print("Generator.__call()__: np.shape(p_yt)=" + str(np.shape(p_yt)))
 
         return p_yt
     # end def

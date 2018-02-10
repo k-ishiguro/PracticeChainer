@@ -8,7 +8,6 @@
 #              serialized object, containing lists of tokenized training sequences (source, target) and vocabulary dictionaries (source, target)
 #              output_prefix
 #              Note:
-#                all sequences are sorted by the TARGET token length in descending order (handled by preprocess.py)
 #                all target seqeucnes end with <EOS>. 
 #   
 #              ToDo: add options to control network structure
@@ -23,7 +22,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     19/01/2018 (DD/MM/YY)
-# Last update: 01/02/2018 (DD/MM/YY)
+# Last update: 05/02/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 
@@ -99,34 +98,26 @@ def make_datatuples(src_list, tgt_list):
 
 def minibatchToListTuple(train_batch, gpuid):
     """
-    Decompose the minibatch (list of (src, tgt) tuple) into two chainer Variable, which are lists of sequences (src, tgt).
+    Decompose the minibatch (list of (src, tgt) tuple) into two lists of numpy.ndarray(int), which are lists of wordID sequences (src, tgt).
+    Sort the target sequences in descending order of sequence length
     Transfer them to the designated device:
     if gpuid = 0: cpu (numpy)
     else cpu (cupy)
 
     :param train_batch:list of (src seq., tgt seq.) tuples.
     :param gpuid: 0 if CPU, else GPU
-    :return: src_list: list of (len-seq) numpy array.
+    :return: src_list: lists of (len-seq) numpy array (type=int)
     """
 
-    src_list, tgt_list = zip(*train_batch)
-    
-    ### for DEBUG ###
-    print(type(src_list))
-    print(type(src_list[1]))
-    print(src_list[1])
-    print(tgt_list[1])
-    print(len(src_list))
-    ### for DEBUG ###
+    src_list, tgt_list = zip(*train_batch)   
 
-    src_list_of_array = [ xp.array(x, dtype=xp.float32) for x in src_list  ]
-    tgt_list_of_array = [ xp.array(x, dtype=xp.float32) for x in tgt_list  ]
+   
+    # sort target sentences
+    tgt_lens = [ len(y) for y in tgt_list  ]
+    tgt_permute_idx = sorted(range(len(tgt_lens)), key=lambda k: tgt_lens[k], reverse=True)
 
-    ### for DEBUG ###
-    print(type(src_list_of_array))
-    print(type(src_list_of_array[1]))
-    print(src_list_of_array[1])
-    ### for DEBUG ###
+    src_list_of_array = [ xp.array(src_list[i], dtype=int) for i in tgt_permute_idx  ]
+    tgt_list_of_array = [ xp.array(tgt_list[i], dtype=int) for i in tgt_permute_idx  ]
 
     return src_list_of_array, tgt_list_of_array
 
@@ -169,7 +160,7 @@ def main(args):
     # set up the network, optimizer, loss etc
     ###
     print("setting the model up...")
-    model = nmt_model.SimpleAttentionNMT(args.n_layers,len(src_vocab_dictionary), len(src_vocab_dictionary), args.w_vec_dim, args.lstm_dim, args.dropout, args.gpu)
+    model = nmt_model.SimpleAttentionNMT(args.n_layers,len(src_vocab_dictionary), len(tgt_vocab_dictionary), args.w_vec_dim, args.lstm_dim, args.dropout, args.gpu)
 
     global xp
     if args.gpu >= 0:
@@ -203,6 +194,7 @@ def main(args):
         train_batch = train_iter.next()
 
         # reshape the data into (src list) and (tgt list), then transfer to gpu if necessary
+        # source sentences will be padded with '-1'
         src_list, tgt_list = minibatchToListTuple(train_batch, args.gpu)
 
         # compute the loss
@@ -211,7 +203,7 @@ def main(args):
         # back-prop by auto differential
         model.cleargrads()
         loss.backward()
-        loss.unchain.backward()
+        loss.unchain()
         optimizer.update()
 
         # one-pass through of training data done.
@@ -242,11 +234,13 @@ def main(args):
 
             former_valid_loss = valid_loss
 
-            # end train_iter.is_new_epochif
-
-        # dump the model and the dictionaries on this epoch
-        dump_variable = (model, src_vocab_dictionary, tgt_vocab_dictionary)
-        pickle.dump(dump_variable, args.out_prefix + "_ep" + str(epoch) + ".model.pckl")
+            # dump the model and the dictionaries on this epoch
+            dump_variable = (model, src_vocab_dictionary, tgt_vocab_dictionary)
+            dump_filename = args.out_prefix + "_ep" + str(epoch) + ".model.pckl"
+            with open(dump_filename, mode="wb") as fout:
+                pickle.dump(dump_variable, fout)
+                
+        # end train_iter.is_new_epochif
 
     # end epoch-for
 

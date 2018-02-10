@@ -13,7 +13,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     13/01/2018 (DD/MM/YY)
-# Last update: 24/01/2018 (DD/MM/YY)
+# Last update: 11/02/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -86,28 +86,70 @@ class GlobalAttention(chainer.Chain):
         """
         compute the context vector.then augment the decoder hidden state with the context vector
 
-        :param xs: chainer Variable consists of B-list of N by D numpy array, B-list of sequences (list, array) of encoder hidden states, B is the minibatch size
+        :param xs: chainer variable, B by max_seq_len by D numpy array, B-list of sequences of D-dim encoder hidden states, B is the minibatch size
         :param h: chaienr Variable, consists of B by D numpy array, B-list of the decoder hidden state of the focused time step
         :return: B-list of augmented decoder hidden sate w/ context vector. B by D*2-dim numpy array,
         """
         B = len(xs)
-        augmented_dec = xp.zeros( (B, self.lstm_dim) )
-        for b in B:
 
-            # compute the attention similarities between xs and h
-            Wh = self.W(h[b])
-            xWh = xp.dot(xs[b], Wh) # should be (N x 1)
-            attention = F.softmax(xWh) # should be (N x 1)
+        Wh = self.W(h) # B by lstm_dim
+        Wh = Wh[:, :, xp.newaxis]
+        Wh.data.astype(xp.float32) # B by lstm_dim by 1
 
-            # weighted sum of xs.
-            context_vec = xp.reshape(xp.dot(xs[b].T, attention), (self.lstm_dim) ) # should be (D)
+        # xs is B by max_seq_len by lstm_dim
+        xWh = F.matmul(xs, Wh) # should be B by max_seq_len 
+        attention = F.softmax(xWh) # should be B by max_seq_len 
+        
+        # weighted sum of xs.
+        context_vec = F.sum( F.scale( xs, attention, axis=0 ), axis=1)
+                
+        # concat and nonlinear transform
+        concated_vec = F.hstack( (h, context_vec) ) # should be B by 2*lstm_dim
+        augmented_vec = F.tanh( self.C( concated_vec )) # should be B by 2*lstm_dim
+        
+        print("####### for DEBUG: Computing Attention weight done.######")
+        print("h is:")
+        print(h.dtype)
+        print(np.shape(h))
+        print(h[0, 0:5])
 
-            # concat and nonlinear transform
-            concated_vec = xp.hstack(h[b], context_vec)
+        print("reshaped Wh is:")
+        print(Wh.dtype)
+        print(np.shape(Wh))
+        print(Wh[0, 0:5, 0])
 
-            augmented_dec[b, :] = F.tanh( self.C(concated_vec) )
+        print("xs is:")
+        print(xs.dtype)
+        print(np.shape(xs))
+        print(xs[0, 0, 0:5])
 
-        return augmented_dec
+        print("xWh is :")
+        print(xWh.dtype)
+        print(np.shape(xWh))
+        print(xWh[0, 0:5, 0])
+
+        print("attention is :")
+        print(attention.dtype)
+        print(np.shape(attention))
+        print(attention[0, 0:5, 0])
+
+        print("context_vec is")
+        print(context_vec.dtype)
+        print(np.shape(context_vec))
+        print(context_vec[0, 0:5])
+
+        print("concated_vec is")
+        print(concated_vec.dtype)
+        print(np.shape(concated_vec))
+        print(np.shape(concated_vec[0]))
+
+        print("augmented_vec is")
+        print(augmented_vec.dtype)
+        print(np.shape(augmented_vec))
+        print("###############################")
+
+
+        return augmented_vec
     # end def
 
 # end MLP-classs
