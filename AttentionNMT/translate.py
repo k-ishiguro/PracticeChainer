@@ -20,7 +20,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     25/01/2018 (DD/MM/YY)
-# Last update: 25/01/2018 (DD/MM/YY)
+# Last update: 15/02/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 
@@ -63,7 +63,7 @@ from chainer.training import extensions
 from chainer import serializers
 from chainer import cuda
 
-from . import nmt_model
+import nmt_model
 
 def getID(vocab_dict, token_str):
     """
@@ -105,14 +105,15 @@ def convertToIDSequence(vocab_dict, line):
     """
 
     tokens = line.rstrip().split()
-    out_array = np.zeros( len(tokens) )
+    out_array = xp.zeros( len(tokens) )
     for i, token in enumerate(tokens):
-        if vocab_dict.has_key(token):
+        if token in vocab_dict: 
             out_array[i] = vocab_dict[token]
         else:
             out_array[i] = vocab_dict["<UNK>"]
         # end has_key-ifelse
     # end token-for
+    out_array = F.reshape(out_array.astype(xp.int32), (1, len(out_array)))
 
     return out_array
 # end convertToIDSequence-def
@@ -130,8 +131,10 @@ def main(args):
     ###
     # load the trained model
     ###
+    with open(args.model, mode='rb') as fin:
+        (model, src_vocab_dictionary, tgt_vocab_dictionary) = pickle.load(fin)
+    # end open-with
 
-    (model, src_vocab_dictionary, tgt_vocab_dictionary) = pickle.load(args.model)
     global xp
     if args.gpu >= 0:
         chainer.cuda.get_device_from_id((args.gpu)).use()
@@ -157,7 +160,7 @@ def main(args):
 
             # translate
             # TODO: change to decode_translate_beam
-            tgt_IDseq, log_lk = model.decode_translate_greedy(src_IDseq, args.max_tgt_length, getID(tgt_vocab_dictionary, '<BOS>'), getID(tgt_vocab_dictionary, '<EOS>'))
+            tgt_IDseq, log_lk = model.decode_translate_greedy(src_IDseq, args.max_tgt_len, getID(tgt_vocab_dictionary, '<BOS>'), getID(tgt_vocab_dictionary, '<EOS>'))
 
             # convert back to the target words
             tgt_line = convertToWordSequence(tgt_vocab_dictionary, tgt_IDseq)
@@ -188,7 +191,7 @@ if __name__ == '__main__':
                         help='Translation output file name')
 
     # output specs
-    parser.add_argumnt('--detailed_output', action='store_true', default=False,
+    parser.add_argument('--detailed_output', action='store_true', default=False,
                       help='enable if log likelihood is needed in translation')
     parser.add_argument('--quiet', '-q', action='store_true', default=False,
                         help='enable if you prefer no outputs in stdout')

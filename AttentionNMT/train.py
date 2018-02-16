@@ -22,7 +22,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     19/01/2018 (DD/MM/YY)
-# Last update: 05/02/2018 (DD/MM/YY)
+# Last update: 15/02/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 
@@ -116,8 +116,8 @@ def minibatchToListTuple(train_batch, gpuid):
     tgt_lens = [ len(y) for y in tgt_list  ]
     tgt_permute_idx = sorted(range(len(tgt_lens)), key=lambda k: tgt_lens[k], reverse=True)
 
-    src_list_of_array = [ xp.array(src_list[i], dtype=int) for i in tgt_permute_idx  ]
-    tgt_list_of_array = [ xp.array(tgt_list[i], dtype=int) for i in tgt_permute_idx  ]
+    src_list_of_array = [ xp.array(src_list[i], dtype=xp.int32) for i in tgt_permute_idx  ]
+    tgt_list_of_array = [ xp.array(tgt_list[i], dtype=xp.int32) for i in tgt_permute_idx  ]
 
     return src_list_of_array, tgt_list_of_array
 
@@ -147,8 +147,6 @@ def main(args):
     print("training data pickle: " + str(args.data) + " loaded. ")
     print("vocabulary size= " + str(len(src_vocab_dictionary)) + "(src), " + str(len(tgt_vocab_dictionary)) + "(tgt)")
     print("sample size= " + str(len(train_tuples)) + "(training), " + str(len(valid_tuples)) + "(valid)")
-
-    
 
     # just a iterators, but is able to repeat and shuffle.
     train_iter = chainer.iterators.SerialIterator(train_tuples, args.batchsize)
@@ -189,7 +187,8 @@ def main(args):
     print("start training...")
     print("################")
     # for each epoch
-    for epoch in range(args.epoch):
+    while train_iter.epoch < args.epoch:
+        
         # iterate training minibatches
         train_batch = train_iter.next()
 
@@ -203,47 +202,52 @@ def main(args):
         # back-prop by auto differential
         model.cleargrads()
         loss.backward()
-        loss.unchain()
+        #loss.unchain()
         optimizer.update()
 
         # one-pass through of training data done.
         if train_iter.is_new_epoch:
 
+            print("########################")
+            print("# epoch " + str(train_iter.epoch) + " validation")
+
             # display training loss
             print('epoch:{:02d} train_loss:{:.04f} '.format(train_iter.epoch, float( loss.data )), end='')
-
+            
             # compute a score on validation set
             valid_losses = []
             while True:
                 valid_batch = valid_iter.next()
                 val_src_list, val_tgt_list = minibatchToListTuple(valid_batch, args.gpu)
-
+                
                 # forward: cross entropy as validation loss
                 val_loss = model.forward_train(val_src_list, val_tgt_list, getID(tgt_vocab_dictionary, '<BOS>'))
                 valid_losses.append( val_loss.data )
-
+                
             # end true-while
             valid_loss = np.mean(valid_losses)
-
+            
             # if valid-score get worse, decrease the learning rate
             if former_valid_loss < valid_loss and epoch > args.learning_rate_decay_start:
                 learning_rate = learning_rate * args.learning_rate_decay
                 print('val_loss:{:.04f} learning rate(changed):{:.04f}'.format(valid_loss), learning_rate)
             else:
                 print('val_loss:{:.04f} learning rate:{:.04f}'.format(valid_loss), learning_rate)
-
+            # end valid_loss-decay-ifelse
+            
             former_valid_loss = valid_loss
-
+            
             # dump the model and the dictionaries on this epoch
             dump_variable = (model, src_vocab_dictionary, tgt_vocab_dictionary)
-            dump_filename = args.out_prefix + "_ep" + str(epoch) + ".model.pckl"
+            dump_filename = args.out_prefix + "_ep" + str(train_iter.epoch) + ".model.pckl"
+            print("dump the learned model to " + dump_filename + "...")
             with open(dump_filename, mode="wb") as fout:
                 pickle.dump(dump_variable, fout)
-                
+            # end open-with
+
         # end train_iter.is_new_epochif
 
     # end epoch-for
-
 
 # end of main()
 

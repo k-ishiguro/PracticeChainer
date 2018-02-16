@@ -53,12 +53,6 @@ from chainer import cuda
 class Decoder(chainer.Chain):
     # A simple Stacked-LSTM attention decoder
 
-    n_layers = 2
-    vocab_size = 50000
-    w_vec_dim = 500
-    lstm_dim = 500
-    dropout = 0.3
-
     def __init__(self, n_layers=2, vocab_size=50000, w_vec_dim=500, lstm_dim=500, gpu=0):
         '''
         initializer with parameters
@@ -81,36 +75,45 @@ class Decoder(chainer.Chain):
         self.vocab_size = vocab_size
         self.w_vec_dim = w_vec_dim
         self.lstm_dim = lstm_dim
-
+        
         global xp
+        global device
         if gpu >= 0:
             xp = cuda.cupy
+            device = gpu
         else:
             xp = np
-
-
+            device = 0
+        # end if-else
+        
         # init scope for layer (modules) WITH parameters
         with self.init_scope():
-
-            self.word_embed = L.EmbedID(in_size=vocab_size, out_size=w_vec_dim)
-
-            self.lstm_layers = []
-
-            # first layer; embedding to hidden state
-            self.lstm_layers.append(L.LSTM(in_size=w_vec_dim, out_size=lstm_dim))
-            # rest of the stacks
+            
+            self.word_embed = L.EmbedID(in_size=vocab_size, out_size=w_vec_dim, ignore_label=-1)
+            self.l1 = L.LSTM(in_size=w_vec_dim, out_size=lstm_dim)
             if n_layers > 1:
-                for l in range(n_layers-1):
-                    self.lstm_layers.append(L.LSTM(in_size=lstm_dim, out_size=lstm_dim))
-                # end l-for
+                self.l2 = L.LSTM(in_size=lstm_dim, out_size=lstm_dim)
+                if n_layers > 2:
+                    self.l3 = L.LSTM(in_size=lstm_dim, out_size=lstm_dim)
+                    if n_layers > 3:
+                        self.l4 = L.LSTM(in_size=lstm_dim, out_size=lstm_dim)
+                        if n_layers > 4:
+                            self.l5 = L.LSTM(in_size=lstm_dim, out_size=lstm_dim)
             # end n_layers-if
-
         # end with
     # end __init__-def
 
     def reset_state(self):
-        for l in range(self.n_layers):
-            self.lstm_layers[l].reset_state()
+        self.l1.reset_state()
+        if self.n_layers > 1:
+            self.l2.reset_state()
+            if self.n_layers > 2:
+                self.l3.reset_state()
+                if self.n_layers > 3:
+                    self.l4.reset_state()
+                    if self.n_layers > 4:
+                        self.l5.reset_state()
+    # end reset_state-def
 
     # wrapped the forward: we prefer to call "decoder_forward"
     def __call__(self, y):
@@ -125,15 +128,25 @@ class Decoder(chainer.Chain):
         :param h: chainer Variable, is a n_layer by B by lstm_dim numpy array, all layer's hidden state initial values
         :return: no return
         """
+        assert isinstance(c, chainer.Variable)
+        assert isinstance(h, chainer.Variable)
 
         assert(len(h) == self.n_layers)
         assert(len(c) == self.n_layers)
 
         B = len(h[0])
         assert(B == len(c[0]))
-
-        for l in range(self.n_layers): # for each layer
-            self.lstm_layers[l].set_state(c[l], h[l])
+        
+        self.l1.set_state(c[0], h[0])
+        if self.n_layers > 1:
+            self.l2.set_state(c[1], h[1])
+            if self.n_layers > 2:
+                self.l3.set_state(c[2], h[2])
+                if self.n_layers > 3:
+                    self.l4.set_state(c[3], h[3])
+                    if self.n_layers > 4:
+                        self.l5.set_state(c[4], h[4])
+        # end n_layers-if
     # end decoder_init-def
 
     def onestep_forward(self, y):
@@ -144,16 +157,35 @@ class Decoder(chainer.Chain):
         :return: h: hidden state of the top LSTM layer, B by lstm_dim-dim numpy array
         '''
 
+
         # embedding
         x = self.word_embed(y) # return Variable
 
         # x should be a Variable, consists of B by lstm_dim numpy array. 
 
         # hidden states of each layer
-        for l in range(self.n_layers):
-            h = self.lstm_layers[l](x)
-            x = h
-        # end l-for
+        h1 = self.l1(x)
+        if self.n_layers > 1:
+            h2 = self.l2(h1)
+            if self.n_layers > 2:
+                h3 = self.l3(h2)
+                if self.n_layers > 3:
+                    h4 = self.l4(h3)
+                    if self.n_layers > 4:
+                        h5 = self.l5(h4)
+                        h = h5
+                    else:
+                        h = h4
+                    # end layer>4-if
+                else:
+                    h = h3
+                # end layer>3-if
+            else:
+                h = h2
+            # end layer>2-if
+        else:
+            h = h1
+        # end n_layers-if
 
         return h
     # end def

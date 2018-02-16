@@ -12,7 +12,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     08/01/2018 (DD/MM/YY)
-# Last update: 18/01/2018 (DD/MM/YY)
+# Last update: 15/02/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -79,17 +79,18 @@ class Encoder(chainer.Chain):
         self.vocab_size = vocab_size
         self.w_vec_dim = w_vec_dim
         self.lstm_dim = lstm_dim
-
+        
         global xp
         if gpu >= 0:
             xp = cuda.cupy
         else:
             xp = np
-
+        # end if-else
+        
         # init scope for layer (modules) WITH parameters
         with self.init_scope():
 
-            self.word_embed = L.EmbedID(in_size=vocab_size, out_size=w_vec_dim)
+            self.word_embed = L.EmbedID(in_size=vocab_size, out_size=w_vec_dim, ignore_label=-1)
             self.lstm_layers = L.NStepLSTM(n_layers, w_vec_dim, lstm_dim, dropout=dropout)
 
         # end with
@@ -106,18 +107,15 @@ class Encoder(chainer.Chain):
         '''
         forward computation of the encoder
 
-        :param x: B-list of numpy arrays, is a B-list of word ID sequences of source inputs, B is a mini-batch size
+        :param x: a Chainer Variable, B by max_len_seq numpy arrays, is a B-list of word ID sequences of source inputs (padded with -1), B is a mini-batch size
         :return:  tuple of (h, c, y)
                    h; all layer's hidden states at the of the sequence. B-list of n_layers by lstm_dim
                    c: all layer's internal cell states at the end of the sequence. B-list of n_layers by lstm_dim
                    y: top layer's hidden state sequence. B-list of seq_length x lstm_dim numpy array
         '''
 
-        x_embed = []
-        for x_s in x:
-            x_s_list = [self.word_embed(x_st) for x_st in x_s  ]
-            x_embed.append( chainer.Variable( xp.asarray(x_s_list) )  )
-        # end x-for
+        #x_embed = self.word_embed(x)
+        x_embed = [ self.word_embed(x_s) for x_s in x  ]
 
         # x_embed must be a list of Variable, where each Variable corresponds to a sequence ( of embedded vectors)
         h, c, y = self.lstm_layers(None, None, x_embed) # LSTM stacks. initial states are zero.
@@ -125,6 +123,7 @@ class Encoder(chainer.Chain):
         # h; all layer's hidden states at the of the sequence
         # c: all layer's internal cell states at the end of the sqeucne
         # y: top layer's hidden state sequence
+        
         return h, c, y
     # end def
 
