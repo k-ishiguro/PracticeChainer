@@ -22,7 +22,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     19/01/2018 (DD/MM/YY)
-# Last update: 15/02/2018 (DD/MM/YY)
+# Last update: 19/02/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 
@@ -67,20 +67,9 @@ from chainer import cuda
 
 import nmt_model
 
-def getID(vocab_dict, token_str):
-    """
-    return the token ID of the input token_str, in the vocab_dict dictionary
-
-    :param vocab_dict: dictionary to look up
-    :param token_str: target key
-    :return: inrteer, ID of the token str
-    """
-
-    return vocab_dict[token_str]
-
 def make_datatuples(src_list, tgt_list):
     """
-    load the src/tgt sequence list, then zip them, return as a list of tuples (src_seq, tgt_seq)
+    load the src/tgt sequence list, convert to xp.array, then zip them, return as a list of tuples (src_seq, tgt_seq)
     :param src_list: list of source sequences
     :param tgt_list: list of target sequences 
     :return: a list of tuples, each element is (src_seq, tgt_seq)
@@ -91,14 +80,14 @@ def make_datatuples(src_list, tgt_list):
     # pair them
     out_tuples = []
     for (s, t) in zip(src_list, tgt_list):
-        out_tuples.append( (s, t) )
+        out_tuples.append( (xp.array(s, dtype=xp.int32), xp.array(t, dtype=xp.int32)) )
 
     return out_tuples
 # end make_datatuples-def
 
 def minibatchToListTuple(train_batch, gpuid):
     """
-    Decompose the minibatch (list of (src, tgt) tuple) into two lists of numpy.ndarray(int), which are lists of wordID sequences (src, tgt).
+    Decompose the minibatch (list of (array(src), array(tgt)) tuple) into two lists of ndarray(int), which are lists of wordID sequences (src, tgt).
     Sort the target sequences in descending order of sequence length
     Transfer them to the designated device:
     if gpuid = 0: cpu (numpy)
@@ -116,8 +105,10 @@ def minibatchToListTuple(train_batch, gpuid):
     tgt_lens = [ len(y) for y in tgt_list  ]
     tgt_permute_idx = sorted(range(len(tgt_lens)), key=lambda k: tgt_lens[k], reverse=True)
 
-    src_list_of_array = [ xp.array(src_list[i], dtype=xp.int32) for i in tgt_permute_idx  ]
-    tgt_list_of_array = [ xp.array(tgt_list[i], dtype=xp.int32) for i in tgt_permute_idx  ]
+    src_list_of_array = [ src_list[i] for i in tgt_permute_idx  ]
+    tgt_list_of_array = [ tgt_list[i] for i in tgt_permute_idx  ]
+    #src_list_of_array = [ xp.array(src_list[i], dtype=xp.int32) for i in tgt_permute_idx  ]
+    #tgt_list_of_array = [ xp.array(tgt_list[i], dtype=xp.int32) for i in tgt_permute_idx  ]
 
     return src_list_of_array, tgt_list_of_array
 
@@ -142,6 +133,30 @@ def main(args):
         (train_src, train_tgt, valid_src, valid_tgt, src_vocab_dictionary, tgt_vocab_dictionary) = pickle.load(fin)
     # end open-with
 
+    ###
+    # set up the network, optimizer, loss etc
+    ###
+    print("setting the model up...")
+    model = nmt_model.SimpleAttentionNMT(args.n_layers, src_vocab_dictionary, tgt_vocab_dictionary, args.w_vec_dim, args.lstm_dim, args.dropout, args.gpu)
+
+    print("model set up complete. ")
+
+    # set up the optimizer with gradient clipping
+    optimizer = chainer.optimizers.SGD(lr=args.learning_rate)
+    optimizer.setup(model)
+    optimizer.add_hook(chainer.optimizer.GradientClipping(5.0))
+    print("optimizer: SGD, leargning rate=" + str(optimizer.lr))
+
+    global xp
+    if args.gpu >= 0:
+        chainer.cuda.get_device_from_id((args.gpu)).use()
+        model.to_gpu(args.gpu) # copy the chain to the GPU
+        xp = cuda.cupy
+    else:
+        xp = np
+    # end args.gpu-if
+
+    # make a list of type(array, array)
     train_tuples = make_datatuples(train_src, train_tgt)
     valid_tuples = make_datatuples(valid_src, valid_tgt)
     print("training data pickle: " + str(args.data) + " loaded. ")
@@ -153,28 +168,7 @@ def main(args):
     valid_iter = chainer.iterators.SerialIterator(valid_tuples, args.batchsize, repeat=False, shuffle=False)
 
     print("minibathces: size=" + str(args.batchsize))
-
-    ###
-    # set up the network, optimizer, loss etc
-    ###
-    print("setting the model up...")
-    model = nmt_model.SimpleAttentionNMT(args.n_layers,len(src_vocab_dictionary), len(tgt_vocab_dictionary), args.w_vec_dim, args.lstm_dim, args.dropout, args.gpu)
-
-    global xp
-    if args.gpu >= 0:
-        chainer.cuda.get_device_from_id((args.gpu)).use()
-        model.to_gpu(args.gpu) # copy the chain to the GPU
-        xp = cuda.cupy
-    else:
-        xp = np
-    # end args.gpu-if
-    print("model set up complete. ")
-
-    # set up the optimizer with gradient clipping
-    optimizer = chainer.optimizers.SGD(lr=args.learning_rate)
-    optimizer.setup(model)
-    optimizer.add_hook(chainer.optimizer.GradientClipping(5.0))
-    print("optimizer: SGD, leargning rate=" + str(optimizer.lr))
+    print("data setup complete")
     
 
     ###
@@ -192,12 +186,11 @@ def main(args):
         # iterate training minibatches
         train_batch = train_iter.next()
 
-        # reshape the data into (src list) and (tgt list), then transfer to gpu if necessary
-        # source sentences will be padded with '-1'
+        # reshape the data into (src list) and (tgt list)
         src_list, tgt_list = minibatchToListTuple(train_batch, args.gpu)
 
         # compute the loss
-        loss = model.forward_train(src_list, tgt_list, getID(tgt_vocab_dictionary, '<BOS>'))
+        loss = model.forward_train(src_list, tgt_list)
 
         # back-prop by auto differential
         model.cleargrads()
@@ -207,9 +200,6 @@ def main(args):
 
         # one-pass through of training data done.
         if train_iter.is_new_epoch:
-
-            print("########################")
-            print("# epoch " + str(train_iter.epoch) + " validation")
 
             # display training loss
             print('epoch:{:02d} train_loss:{:.04f} '.format(train_iter.epoch, float( loss.data )), end='')
@@ -221,33 +211,51 @@ def main(args):
                 val_src_list, val_tgt_list = minibatchToListTuple(valid_batch, args.gpu)
                 
                 # forward: cross entropy as validation loss
-                val_loss = model.forward_train(val_src_list, val_tgt_list, getID(tgt_vocab_dictionary, '<BOS>'))
-                valid_losses.append( val_loss.data )
+                val_loss = model.forward_train(val_src_list, val_tgt_list)
+                val_loss.to_cpu()
+                valid_losses.append(val_loss.data)
+                            
+                # sweeped all validation sentences
+                if valid_iter.is_new_epoch:
+                    valid_iter.epoch = 0
+                    valid_iter.current_position = 0
+                    valid_iter.is_new_epoch = False
+                    valid_iter._pushed_position = None
+                    valid_loss = np.mean(valid_losses)
+
+                    # if valid-score get worse, decrease the learning rate
+                    if former_valid_loss < valid_loss and train_iter.epoch > args.learning_rate_decay_start:
+                        learning_rate = learning_rate * args.learning_rate_decay
+                        optimizer.hyperparam.lr = learning_rate
+                        print('val_loss:{:.04f} learning rate(changed):{:.04f}'.format(valid_loss, learning_rate))
+                    else:
+                        print('val_loss:{:.04f} learning rate:{:.04f}'.format(valid_loss, learning_rate))
+                    # end valid_loss-decay-ifelse
+                    
+                    former_valid_loss = valid_loss
+
+                    ##
+                    # dump the model specification, and the model binary
+                    ##
+
+                    # parameters for model specificaton, and dictionary
+                    dump_filename = args.out_prefix + "_ep" + str(train_iter.epoch) + ".model.spec"
+                    dump_vars = (args.n_layers, src_vocab_dictionary, tgt_vocab_dictionary, args.w_vec_dim, args.lstm_dim, args.dropout, args.gpu)
+                    with open(dump_filename, mode='wb') as fout:
+                        pickle.dump(dump_vars, fout)
+                    
+                    # model binary
+                    dump_filename = args.out_prefix + "_ep" + str(train_iter.epoch) + ".model.npz"
+                    serializers.save_npz(dump_filename, model, compression=True)
                 
-            # end true-while
-            valid_loss = np.mean(valid_losses)
-            
-            # if valid-score get worse, decrease the learning rate
-            if former_valid_loss < valid_loss and epoch > args.learning_rate_decay_start:
-                learning_rate = learning_rate * args.learning_rate_decay
-                print('val_loss:{:.04f} learning rate(changed):{:.04f}'.format(valid_loss), learning_rate)
-            else:
-                print('val_loss:{:.04f} learning rate:{:.04f}'.format(valid_loss), learning_rate)
-            # end valid_loss-decay-ifelse
-            
-            former_valid_loss = valid_loss
-            
-            # dump the model and the dictionaries on this epoch
-            dump_variable = (model, src_vocab_dictionary, tgt_vocab_dictionary)
-            dump_filename = args.out_prefix + "_ep" + str(train_iter.epoch) + ".model.pckl"
-            print("dump the learned model to " + dump_filename + "...")
-            with open(dump_filename, mode="wb") as fout:
-                pickle.dump(dump_variable, fout)
-            # end open-with
+                    # break the valid_iter-whlie. go toe next training iteration. 
+                    break 
+                # end valid_iter_is_new_epoch-if
+            # end true-while for valid_iter
 
         # end train_iter.is_new_epochif
 
-    # end epoch-for
+    # end true-while for train_iter
 
 # end of main()
 

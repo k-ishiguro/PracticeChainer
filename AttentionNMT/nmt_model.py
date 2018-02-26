@@ -11,7 +11,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     14/01/2018 (DD/MM/YY)
-# Last update: 15/02/2018 (DD/MM/YY)
+# Last update: 26/02/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -61,13 +61,36 @@ class SimpleAttentionNMT(chainer.Chain):
     No bidirectional LSTM in encoder, no input-feed in decoder.
     """
 
-    def __init__(self, n_layers=2, src_vocab_size=50000, tgt_vocab_size=50000, w_vec_dim=500, lstm_dim=500, dropout=0.1, gpu=0):
+    def getSrcID(self, token_str):
+        """
+        return the token ID of the input token_str, in the src_vocab_dict dictionary
+        
+        :param token_str: target key
+        :return: inrteer, ID of the token str
+        """
+
+        return self.src_vocab_dict[token_str]
+    # end getSrcID
+
+    def getTgtID(self, token_str):
+        """
+        return the token ID of the input token_str, in the tgt_vocab_dict dictionary
+        
+        :param token_str: target key
+        :return: inrteer, ID of the token str
+        """
+
+        return self.tgt_vocab_dict[token_str]
+    # end getTgtID
+
+
+    def __init__(self, n_layers=2, src_vocab_dict=None, tgt_vocab_dict=None, w_vec_dim=500, lstm_dim=500, dropout=0.1, gpu=0):
         """
         Instantiate and initialize the entire NMT network.
 
         :param n_layers: number of LSTM stacked layers, shared among encoder and decoder
-        :param src_vocab_size: number of unique tokens in src.
-        :param tgt_vocab_size: number of unique tokens in tgt.
+        :param src_vocab_dict: dictionary of source vocabulary
+        :param tgt_vocab_dict: dictionary of target vocabulary
         :param w_vec_dim: word embedding dimension. shared among encoder and decoder.
         :param lstm_dim: lstm hidden vector dimension. shared among encoder and decoder
         :param dropout: dropout ratio
@@ -78,8 +101,8 @@ class SimpleAttentionNMT(chainer.Chain):
 
         # initialize size info
         self.n_layers = n_layers
-        self.src_vocab_size = src_vocab_size
-        self.tgt_vocab_size = tgt_vocab_size
+        self.src_vocab_dict = src_vocab_dict
+        self.tgt_vocab_dict = tgt_vocab_dict
         self.w_vec_dim = w_vec_dim
         self.lstm_dim = lstm_dim
         self.dropout = dropout
@@ -89,20 +112,28 @@ class SimpleAttentionNMT(chainer.Chain):
             xp = cuda.cupy
         else:
             xp = np
+        # end if-else
+
+        if src_vocab_dict and tgt_vocab_dict:
+            self.src_vocab_size = len(src_vocab_dict)
+            self.tgt_vocab_size = len(tgt_vocab_dict)
+        else:
+            self.src_vocab_size = 1
+            self.tgt_vocab_size = 1
 
         # init scope for layer (modules) WITH parameters <-- to detect by backward/optimizer/updater?
         with self.init_scope():
             # ID sequences are fed into the encoder, hidden vector sequences are emitted.
-            self.encoder = encoder.Encoder(n_layers, src_vocab_size, w_vec_dim, lstm_dim, dropout, gpu)
+            self.encoder = encoder.Encoder(n_layers, self.src_vocab_size, w_vec_dim, lstm_dim, dropout, gpu)
 
             # ID sequences and encoder hidden vector sequences are fed into the decoder, hidden vector sequences are emitted
-            self.decoder = decoder.Decoder(n_layers, tgt_vocab_size, w_vec_dim, lstm_dim, gpu)
+            self.decoder = decoder.Decoder(n_layers, self.tgt_vocab_size, w_vec_dim, lstm_dim, gpu)
 
             # encdoer/decoder hidden vector sequences are fed into the Attention network, augmented decoder hiddens state are emited
             self.global_attention = attention.GlobalAttention(lstm_dim, gpu)
 
             # augmented decoder hidden vector sequences are fed into the Generator network, log p(y_t|X, Y_t-1) is emitted.
-            self.generator = generator.Generator(lstm_dim * 2, tgt_vocab_size, dropout)
+            self.generator = generator.Generator(lstm_dim * 2, self.tgt_vocab_size, dropout)
         # end with
 
         print("nmt_model.SimpleAttentionNMT is initialized")
@@ -120,7 +151,7 @@ class SimpleAttentionNMT(chainer.Chain):
         """
         return self.forward_train(src, tgt)
 
-    def forward_train(self, src, tgt, BOSID):
+    def forward_train(self, src, tgt):
         """
         forward computation for training. given B pairs of source seq. and target seq,
         compute the log likelihood of the tgt sequence, then return cross entropy loss.
@@ -128,7 +159,6 @@ class SimpleAttentionNMT(chainer.Chain):
         :param src: B-list of (len-seq) numpy array (dtype=int), is a B-list of ID sequences of source inputs, where B is the minibatch size.
         :param tgt: B-list of (len-seq) numpy array (dtype=int), is a B-list of ID sequences (numpy array) of corresponding target inputs.
                      Lengths of sequences must be sorted in descending order (for F.LSTM in decoder)
-        :param BOSID: integer, token ID of Target's BOS token
         :return: the cross entropy loss on p(Y | X)
         """
 
@@ -136,14 +166,16 @@ class SimpleAttentionNMT(chainer.Chain):
         padded_src = F.pad_sequence(src, None, -1)
 
         # forward the encoder with the entire sequence
-        hs, cs, xs = self.encoder.forward(padded_src)
-        
+        hs, cs, xs = self.encoder.forward(padded_src)       
         # convert xs into a matrix (Variable)
-        (B, src_len, ls_dim) = np.shape(xs)
-        xs_mat = xp.zeros( (B, src_len, ls_dim), dtype=xp.float32 )
-        for b in range(B):
-            xs_mat[b, :, :] = xp.reshape(xs[b].data, (1, src_len, ls_dim))
-        # end b-for
+        xs_mat = F.stack(xs)
+        
+        ### THIS IS A BAD WAY (super slow!!###
+        #(B, src_len, ls_dim) = np.shape(xs)
+        #xs_mat = xp.zeros( (B, src_len, ls_dim), dtype=xp.float32 )
+        #for b in range(B):
+        #    xs_mat[b, :, :] = xp.reshape(xs[b].data, (1, src_len, ls_dim))
+        ## end b-for
 
         ### for debug ###
         #print("####### for DEBUG: Encoder forwarding done.######")
@@ -156,16 +188,17 @@ class SimpleAttentionNMT(chainer.Chain):
         #print("xs is: ")
         #print(type(xs))
         #print(len(xs))
-        #print(np.shape(xs))
         #print(xs[0].dtype)
-        #print(np.shape(xs[0]))
+        #print(len(xs[0]))
+        #print(len(xs[0][0]))
         #print("xs_mat is: ")
         #print(xs_mat.dtype)
         #print(len(xs_mat))
         #print(xs_mat[0].dtype)
-        #print(np.shape(xs_mat[0]))
-        #print(np.sum(xs[0][0, :]))
-        #print(np.sum(xs_mat[0, 0, :] ) )
+        #print(len(xs_mat[0]))
+        #print(len(xs_mat[0][0]))
+        #print(Xp.sum(xs[0][0, :]))
+        #print(Xp.sum(xs_mat[0, 0, :] ) )
         #print("####################")
 
         # given the encoder states, initialize the decoder. each network memorizes (at most) B rnn histories.
@@ -182,12 +215,13 @@ class SimpleAttentionNMT(chainer.Chain):
 
         # for loop-ing w.r.t. time step t.
         for t in range(max_len_seq):
-            tgt_tokens_at_t = xp.array(transposed_tgt[t].data.astype(xp.int32))
+            tgt_tokens_at_t = transposed_tgt[t]
+            #tgt_tokens_at_t = xp.array(transposed_tgt[t].data.astype(xp.int32))
 
             tgt_batch_size = len(tgt_tokens_at_t)
 
             if t==0:
-                BOSID_array = xp.ones(tgt_batch_size) * BOSID
+                BOSID_array = xp.ones(tgt_batch_size) * self.getTgtID("<BOS>")
                 input_tokens_at_t = xp.array(BOSID_array.astype(xp.int32))
             else:
                 tgt_t1 = transposed_tgt[t-1].data.astype(xp.int32)
@@ -239,7 +273,7 @@ class SimpleAttentionNMT(chainer.Chain):
             loss_now = F.softmax_cross_entropy(pY_t, tgt_tokens_at_t)            
             loss += loss_now
             #print("####### For DEBUG: loss computed.######")
-            #print("loww_now is: ")
+            #print("loss_now is: ")
             #print(loss_now)
 
             #print("loss is: ")
@@ -251,14 +285,12 @@ class SimpleAttentionNMT(chainer.Chain):
         return loss
     # end def
 
-    def decode_translate_greedy(self, src, max_tgt_length, BOSID, EOSID):
+    def decode_translate_greedy(self, src, max_tgt_length):
         """
         1-best Greedy search for decoding (translation) given a src ID sequence.
 
-        :param src: an ID sequences of source inputs (int32 nump/cuda array)
+        :param src: an ID sequence of source inputs (int32 nump/cuda array)
         :param max_tgt_length: an maximum number of tokens for a translation
-        :param BOSID: integer, token ID of Traget's BOS token
-        :param EOSID: integer, token ID of Target's EOS token
         :return: an ID sequences of the predicted target outputs, len(??)-dim numpy array
                   log likelihood of the sequence
         """
@@ -267,43 +299,82 @@ class SimpleAttentionNMT(chainer.Chain):
         #self.encoder.reset_state()
         hs, cs, xs = self.encoder.forward(src)
         # convert xs into a matrix (Variable)
-        (b, src_len, ls_dim) = np.shape(xs) # b should be 1
-        assert(b == 1)
-        xs_mat = F.reshape(xs[0].data, (1, src_len, ls_dim))
-
+        xs_mat = F.stack(xs)
+        #(b, src_len, ls_dim) = np.shape(xs) # b should be 1
+        #assert(b == 1)
+        #xs_mat = F.reshape(xs[0].data, (1, src_len, ls_dim))
+                
         # given the encoder states, initialize the decoder. each network memorizes (at most) B rnn histories.
         #self.decoder.reset_state()
         self.decoder.decoder_init(cs, hs)
 
         # forward the decoder+attention+generator for each time(token step)
         # for loop-ing w.r.t. time step t.
-        input_token_at_t = BOSID
+        input_token_at_t = xp.asarray( [self.getTgtID("<BOS>")] ).astype(xp.int32)
+
         tgt_token_at_t = None
         pred_y = []
         log_lk = 0.0
-
+        
         for t in range(max_tgt_length):
-
+            
             # input the previously emitted target word
             if t > 0:
-                input_token_at_t = tgt_token_at_t
+                temp = tgt_token_at_t
+                input_token_at_t = xp.array([temp], dtype=xp.int32)
             # end if
-
+            
+            #print("####### For DEBUG: check decoder input.######")            
+            #print("input_token_at_t is;")
+            #print(type(input_token_at_t))
+            #print(len(input_token_at_t))
+            #print(input_token_at_t)
+            #print(type(input_token_at_t[0]))
+            #print(input_token_at_t[0])
+            #print("#############")
+            
             # fed into the decoder, attention, and generator.
-            h = self.decoder.onestep_forward(xp.array(input_token_at_t, dtype=xp.float32))
+            h = self.decoder.onestep_forward(input_token_at_t)
             augmented_vec = self.global_attention(xs_mat, h)
             pY_t = self.generator(augmented_vec)
-
-            # simple 1-best greedy search
-            tgt_token_at_t = np.argmax(pY_t)
-            log_lk = log_lk + pY_t[tgt_token_at_t]
-
+            
+            #print("####### For DEBUG: check generator output.######")
+            #print("pY_t is;")
+            #print(type(pY_t))
+            #print(len(pY_t))
+            #print(pY_t)
+            #print(pY_t.data)
+            #print("#############")
+            
+            # simple 1-best greedy search            
+            tgt_token_at_t = xp.argmax(pY_t.data)
+            log_lk = log_lk + pY_t.data[0][tgt_token_at_t]
+            
+            #print("####### For DEBUG: check decoded emission.######")
+            #print("tgt_token_at_t is:")
+            #print(type(tgt_token_at_t))
+            #print(tgt_token_at_t)
+            #print(tgt_token_at_t.data)
+            #print(type(tgt_token_at_t.data))
+            #print("pY_t is:")
+            #print(type(pY_t))
+            #print(len(pY_t))
+            #print(type(pY_t[0]))
+            #print(len(pY_t[0]))
+            #print(type(pY_t[0][tgt_token_at_t]))
+            #print(pY_t[0][tgt_token_at_t])            
+            #print("log_lk is:")
+            #print(type(log_lk))
+            #print(len(pY_t))
+            #print(log_lk)            
+            #print("#############")
+            
             # add the emitted word to the decoding sequence
             pred_y.append(tgt_token_at_t)
-
-            # end if EOS
-            if tgt_token_at_t == EOSID:
-                return np.array(pred_y)
+            
+            # end if EOS            
+            if tgt_token_at_t == self.getTgtID("<EOS>"):
+                return pred_y, log_lk
         # end tgt-for
 
         # no EOS, reached the maximum length of the target decoding length

@@ -20,7 +20,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     25/01/2018 (DD/MM/YY)
-# Last update: 15/02/2018 (DD/MM/YY)
+# Last update: 26/02/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 
@@ -65,29 +65,18 @@ from chainer import cuda
 
 import nmt_model
 
-def getID(vocab_dict, token_str):
-    """
-    return the token ID of the input token_str, in the vocab_dict dictionary
-
-    :param vocab_dict: dictionary to look up
-    :param token_str: target key
-    :return: inrteer, ID of the token str
-    """
-
-    return vocab_dict[token_str]
-
 def convertToWordSequence(vocab_dict, IDseq):
     """
     Convert an ID array into a tokenized string.
 
     :param vocab_dict: dictionary to look up
-    :param IDseq: np.array, sequence of token IDs
+    :param IDseq: list of token IDs
     :return: a tokenized string
     """
 
     out_list = []
     for id in IDseq:
-        out_list.append(vocab_dict.keys()[vocab_dict.values().index(id)])
+        out_list.append( list(vocab_dict.keys())[list(vocab_dict.values()).index(id)])
 
     # remove EOS
     if out_list[-1] == "<EOS>":
@@ -101,7 +90,7 @@ def convertToIDSequence(vocab_dict, line):
 
     :param vocab_dict: dictionary to look up
     :param line: string, a tokenized sentence
-    :return: numpy array of token IDs
+    :return: a numpy array of token IDs
     """
 
     tokens = line.rstrip().split()
@@ -112,8 +101,8 @@ def convertToIDSequence(vocab_dict, line):
         else:
             out_array[i] = vocab_dict["<UNK>"]
         # end has_key-ifelse
-    # end token-for
-    out_array = F.reshape(out_array.astype(xp.int32), (1, len(out_array)))
+    # end token-for    
+    out_array = F.reshape(out_array.astype("i"), (1, len(out_array)))
 
     return out_array
 # end convertToIDSequence-def
@@ -129,11 +118,14 @@ def main(args):
 
 
     ###
-    # load the trained model
+    # load the trained spec and model
     ###
-    with open(args.model, mode='rb') as fin:
-        (model, src_vocab_dictionary, tgt_vocab_dictionary) = pickle.load(fin)
-    # end open-with
+    with open(args.modelname + ".spec", mode='rb') as fin:
+        (n_layers, src_vocab_dictionary, tgt_vocab_dictionary, w_vec_dim, lstm_dim, dropout, gpu) = pickle.load(fin)
+    print("trained model specification " + str(args.modelname) + ".sepc loaded. ")
+
+    model = nmt_model.SimpleAttentionNMT(n_layers, src_vocab_dictionary, tgt_vocab_dictionary, w_vec_dim, lstm_dim, dropout, args.gpu)
+    serializers.load_npz(args.modelname+".npz", model)
 
     global xp
     if args.gpu >= 0:
@@ -143,13 +135,15 @@ def main(args):
     else:
         xp = np
     # end args.gpu-if
-
-    print("trained model pickle " + str(args.model) + " loaded. ")
+    print("trained model serializer " + str(args.modelname) + ".npz loaded. ")
 
     ###
     # read the input and perform translation
     ###
 
+    print("##################")
+    print("#start translatoin")
+    print("##################")
     snt_id = 0
     with open(args.src, 'r') as fin, open(args.out_name, 'w') as fout:
         snt_id = snt_id + 1
@@ -160,8 +154,8 @@ def main(args):
 
             # translate
             # TODO: change to decode_translate_beam
-            tgt_IDseq, log_lk = model.decode_translate_greedy(src_IDseq, args.max_tgt_len, getID(tgt_vocab_dictionary, '<BOS>'), getID(tgt_vocab_dictionary, '<EOS>'))
-
+            tgt_IDseq, log_lk = model.decode_translate_greedy(src_IDseq, args.max_tgt_len)
+            
             # convert back to the target words
             tgt_line = convertToWordSequence(tgt_vocab_dictionary, tgt_IDseq)
 
@@ -172,7 +166,7 @@ def main(args):
             if not args.quiet:
                 print("input " + str(snt_id) + ": " + src_line.rstrip())
                 print("translation " + str(snt_id) + ": " + tgt_line)
-                print("log likelihood: " + log_lk)
+                print("log likelihood: " + str(log_lk))
                 print(" ")
         # end src_lines-for
     # end with-open
@@ -183,8 +177,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Chainer Example: Attention NMT')
 
     # forced inputs: trained model binary, input source, output target
-    parser.add_argument('-model', type=str, required=True,
-                        help='serialized chainer model, containing the trained NMT model, src/tgt vocabulary dictionary')
+    parser.add_argument('-modelname', type=str, required=True,
+                        help='prefix for (1)pickle-serialized model parameter specifications (<prefix>.spec) and (2) chainer serialized NMT model (<prefix>.npz)')
+
     parser.add_argument('-src', type=str, required=True,
                         help="a text file with source input sentences")
     parser.add_argument('-out_name', type=str, required=True,
