@@ -12,7 +12,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     08/01/2018 (DD/MM/YY)
-# Last update: 15/02/2018 (DD/MM/YY)
+# Last update: 01/03/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -57,7 +57,7 @@ from chainer.training import extensions
 class Encoder(chainer.Chain):
     # A simple stacked LSTM encoder.
 
-    def __init__(self, n_layers=2, vocab_size=50000, w_vec_dim=500, lstm_dim=500, dropout=0.3, gpu=0):
+    def __init__(self, n_layers=2, vocab_size=50000, w_vec_dim=500, lstm_dim=500, encoder_type='rnn', dropout=0.3, gpu=0):
         '''
         initializer with parameters
 
@@ -65,6 +65,7 @@ class Encoder(chainer.Chain):
         :param vocab_size: vocabulary size
         :param w_vec_dim: dimension of word embedding
         :param lstm_dim: dimension (# of units) of the LSTM hidden vectors
+        :param encoder_type: 'rnn' for uni-directional encoder, 'brnn' for bi-directional encoder
         :param drop_out: dropout ratio
         :param gpu: gpu index. if 0, use cpu
         :return:
@@ -79,6 +80,7 @@ class Encoder(chainer.Chain):
         self.vocab_size = vocab_size
         self.w_vec_dim = w_vec_dim
         self.lstm_dim = lstm_dim
+        self.encoder_type = encoder_type
         
         global xp
         if gpu >= 0:
@@ -92,6 +94,9 @@ class Encoder(chainer.Chain):
 
             self.word_embed = L.EmbedID(in_size=vocab_size, out_size=w_vec_dim, ignore_label=-1)
             self.lstm_layers = L.NStepLSTM(n_layers, w_vec_dim, lstm_dim, dropout=dropout)
+            if encoder_type=='brnn':
+                self.lstm_layers = L.NSteopBiLSTM(n_layers, w_vec_dim, lstm_dim//2, dropout=dropout)
+            # end-if
 
         # end with
     # end init
@@ -111,7 +116,7 @@ class Encoder(chainer.Chain):
         :return:  tuple of (h, c, y)
                    h; all layer's hidden states at the of the sequence. B-list of n_layers by lstm_dim
                    c: all layer's internal cell states at the end of the sequence. B-list of n_layers by lstm_dim
-                   y: top layer's hidden state sequence. B-list of seq_length x lstm_dim numpy array
+                   y: top layer's hidden state sequence. B-list of seq_length x lstm_dim lstm_dim (if brnn) numpy array
         '''
 
         #x_embed = self.word_embed(x)

@@ -18,7 +18,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     25/01/2018 (DD/MM/YY)
-# Last update: 28/02/2018 (DD/MM/YY)
+# Last update: 01/03/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 
@@ -119,10 +119,10 @@ def main(args):
     # load the trained spec and model
     ###
     with open(args.modelname + ".spec", mode='rb') as fin:
-        (n_layers, src_vocab_dictionary, tgt_vocab_dictionary, w_vec_dim, lstm_dim, dropout, gpu) = pickle.load(fin)
+        (n_layers, src_vocab_dictionary, tgt_vocab_dictionary, w_vec_dim, lstm_dim, encoder_type, dropout, gpu) = pickle.load(fin)
     print("trained model specification " + str(args.modelname) + ".sepc loaded. ")
 
-    model = nmt_model.SimpleAttentionNMT(n_layers, src_vocab_dictionary, tgt_vocab_dictionary, w_vec_dim, lstm_dim, dropout, args.gpu)
+    model = nmt_model.SimpleAttentionNMT(n_layers, src_vocab_dictionary, tgt_vocab_dictionary, w_vec_dim, lstm_dim, encoder_type, dropout, args.gpu)
     serializers.load_npz(args.modelname+".npz", model)
 
     global xp
@@ -142,11 +142,13 @@ def main(args):
     print("##################")
     print("#start translatoin")
     print("##################")
-    snt_id = 0
+    snt_id = -1
     with open(args.src, 'r') as fin, open(args.out_name, 'w') as fout:
-        snt_id = snt_id + 1
+
         src_lines = fin.readlines()
         for src_line in src_lines:
+            snt_id = snt_id + 1
+
             # convert the line into srcID sequence
             src_IDseq = convertToIDSequence(src_vocab_dictionary, src_line)
 

@@ -9,7 +9,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     14/01/2018 (DD/MM/YY)
-# Last update: 28/02/2018 (DD/MM/YY)
+# Last update: 01/03/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -157,7 +157,7 @@ class SimpleAttentionNMT(chainer.Chain):
     # end getTgtID
 
 
-    def __init__(self, n_layers=2, src_vocab_dict=None, tgt_vocab_dict=None, w_vec_dim=500, lstm_dim=500, dropout=0.1, gpu=0):
+    def __init__(self, n_layers=2, src_vocab_dict=None, tgt_vocab_dict=None, w_vec_dim=500, lstm_dim=500, encoder_type='rnn', dropout=0.1, gpu=0):
         """
         Instantiate and initialize the entire NMT network.
 
@@ -166,6 +166,7 @@ class SimpleAttentionNMT(chainer.Chain):
         :param tgt_vocab_dict: dictionary of target vocabulary
         :param w_vec_dim: word embedding dimension. shared among encoder and decoder.
         :param lstm_dim: lstm hidden vector dimension. shared among encoder and decoder
+        :param encoder_type: 'rnn' for uni-directional encoder, 'brnn' for bi-directional encoder
         :param dropout: dropout ratio
         :param gpu: gpu id. if > 0, it is GPU-used
         :return:
@@ -178,6 +179,7 @@ class SimpleAttentionNMT(chainer.Chain):
         self.tgt_vocab_dict = tgt_vocab_dict
         self.w_vec_dim = w_vec_dim
         self.lstm_dim = lstm_dim
+        self.encoder_type = encoder_type
         self.dropout = dropout
 
         global xp
@@ -197,7 +199,7 @@ class SimpleAttentionNMT(chainer.Chain):
         # init scope for layer (modules) WITH parameters <-- to detect by backward/optimizer/updater?
         with self.init_scope():
             # ID sequences are fed into the encoder, hidden vector sequences are emitted.
-            self.encoder = encoder.Encoder(n_layers, self.src_vocab_size, w_vec_dim, lstm_dim, dropout, gpu)
+            self.encoder = encoder.Encoder(n_layers, self.src_vocab_size, w_vec_dim, lstm_dim, encoder_type, dropout, gpu)
 
             # ID sequences and encoder hidden vector sequences are fed into the decoder, hidden vector sequences are emitted
             self.decoder = decoder.Decoder(n_layers, self.tgt_vocab_size, w_vec_dim, lstm_dim, gpu)

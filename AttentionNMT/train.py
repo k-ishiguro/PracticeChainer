@@ -10,8 +10,6 @@
 #              Note:
 #                all target seqeucnes end with <EOS>. 
 #   
-#              ToDo: add options to control network structure
-#
 #              outputs:
 #              serialized trained NMT model binary, including:
 #                - trained NMT network
@@ -22,7 +20,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     19/01/2018 (DD/MM/YY)
-# Last update: 19/02/2018 (DD/MM/YY)
+# Last update: 01/03/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 
@@ -137,7 +135,7 @@ def main(args):
     # set up the network, optimizer, loss etc
     ###
     print("setting the model up...")
-    model = nmt_model.SimpleAttentionNMT(args.n_layers, src_vocab_dictionary, tgt_vocab_dictionary, args.w_vec_dim, args.lstm_dim, args.dropout, args.gpu)
+    model = nmt_model.SimpleAttentionNMT(args.n_layers, src_vocab_dictionary, tgt_vocab_dictionary, args.w_vec_dim, args.lstm_dim, args.encoder_type, args.dropout, args.gpu)
 
     print("model set up complete. ")
 
@@ -240,7 +238,7 @@ def main(args):
 
                     # parameters for model specificaton, and dictionary
                     dump_filename = args.out_prefix + "_ep" + str(train_iter.epoch) + ".model.spec"
-                    dump_vars = (args.n_layers, src_vocab_dictionary, tgt_vocab_dictionary, args.w_vec_dim, args.lstm_dim, args.dropout, args.gpu)
+                    dump_vars = (args.n_layers, src_vocab_dictionary, tgt_vocab_dictionary, args.w_vec_dim, args.lstm_dim, args.encoder_type, args.dropout, args.gpu)
                     with open(dump_filename, mode='wb') as fout:
                         pickle.dump(dump_vars, fout)
                     
@@ -293,6 +291,8 @@ if __name__ == '__main__':
                         help='Dimension of word embeddings (shared between encoder and decoder)')
     parser.add_argument('--lstm_dim', '-l', type=int, default=500,
                         help='Dimension of LSTM hidden states (shared between encoder and decoder)')
+    parser.add_argument('--encoder_type', '-e', type=str, default="rnn",
+                        help='Choose \'rnn\' for uni-directional LSTM encoder, \'brnn\' for bi-directional LSTM encoder')
 
     # computational resources, I/F, outputs
     parser.add_argument('--gpu', '-g', type=int, default=-1,
