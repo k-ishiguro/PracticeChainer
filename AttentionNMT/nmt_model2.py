@@ -9,7 +9,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     14/01/2018 (DD/MM/YY)
-# Last update: 28/02/2018 (DD/MM/YY)
+# Last update: 27/02/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -43,7 +43,6 @@ import matplotlib
 # from pandas import Series, DataFrame
 
 # import boto3
-import copy
 
 import chainer
 import chainer.functions as F
@@ -54,53 +53,9 @@ from chainer import cuda
 
 import encoder, decoder, attention, generator
 
-
-class DecoderHypothesis():
-    """
-    Decoder hypothesis for beam search. 
-    Maintaining the decoder network, the last emitted token (id), the entire token emissions (ids), accumulated log likelihood.
-    """
-
-    def __init__(self, decoder):
-        """
-        Instantiate and initialize the decoding hypothesis
-
-        :param decoder: deep copied from the nmt_model. 
-        :return:
-        """
-        
-        # initialize 
-        self.decoder = decoder
-        self.tgt_token_at_t = None # latest token emission id
-        self.log_lk = 0.0 # accumulated log likelihood
-        self.pred_y = [] # path of translation (list of token ids)
-    # end __init__
-
-    def copy(self):
-        """ 
-        deep copy the class instance
-        """
-        out = DecoderHypothesis(self.decoder)
-        
-        out.decoder = copy.deepcopy(self.decoder)
-        out.tgt_token_at_t = copy.deepcopy(self.tgt_token_at_t)
-        out.log_lk = self.log_lk
-        out.pred_y = copy.deepcopy(self.pred_y)
-
-        return out
-    # end copy
-        
-    def extend(self, tgt_token_at_t, log_lk):
-        """
-        extend the translation path, update the log likelihood
-        """
-        self.tgt_token_at_t = tgt_token_at_t
-        self.log_lk = log_lk
-        self.pred_y.append(tgt_token_at_t)
-    # end extend-def
-    
-        
-# end DecoderHypothesis-def
+# TODO: generate a decoder hypothesis class
+# required: deepcopy method, extend(tgt_token_at_t, log_lk)
+# required: entire decoder, tgt_token_at_t(the latest emission), log_lk(accumulatd log likelihood), pred_y(translation path)
 
 class SimpleAttentionNMT(chainer.Chain):
     """
@@ -108,7 +63,7 @@ class SimpleAttentionNMT(chainer.Chain):
     No bidirectional LSTM in encoder, no input-feed in decoder.
     """
 
-    def sortHypotheses(self, hyps, best_k):
+    def sortHypothesis(self, hyps, best_k):
         """
         Sort the decoding hypothesis based on the accumulated log likelihood
         
@@ -118,20 +73,19 @@ class SimpleAttentionNMT(chainer.Chain):
         """
 
         # get the scores
-        log_lks = np.zeros(len(hyps))
+        log_lks = xp.zeros(len(hyps))
         for i, h in enumerate(hyps):
-            log_lks[i] = h.log_lk
+            log_lks[i] = h.loglk
         
         # sort by scores
-        sorted_idx = np.argsort(log_lks)[::-1]
+        sorted_idx = xp.argsort(log_lks)[::-1]
         
         # join the list
         out_list = []
         for k in range(best_k):
             out_list.append(hyps[sorted_idx[k]])
-        # end k-for
-
-        return out_list       
+        
+        return out_lilst       
     # end sortHypothesis
 
     def getSrcID(self, token_str):
@@ -407,7 +361,7 @@ class SimpleAttentionNMT(chainer.Chain):
             #print("#############")
             
             # fed into the decoder, attention, and generator.
-            h = self.decoder.onestep_forward(input_token_at_t)
+            h,  = self.decoder.onestep_forward(input_token_at_t)
             augmented_vec = self.global_attention(xs_mat, h)
             pY_t = self.generator(augmented_vec)
             
@@ -479,15 +433,15 @@ class SimpleAttentionNMT(chainer.Chain):
         self.decoder.decoder_init(cs, hs)
 
         # set up beam hypotheses list. if the hyp emit EOS, i leaves this list
-        beam_hyps = []
-        # at the first iteration, only one hypothesis (all start from BOS)
-        beam_b = DecoderHypothesis(self.decoder) 
-        beam_hyps.append(beam_b)
+        beam_hypes = []
+        for b in range(beam_size):
+            beam_b = BeamDecodeState(self.decoder) 
+            beam_hypes.append(beam_b)
+        # end b-for
 
-
-        # if a beam hyp emit <EOS>, it joins this list. 
-        # when all hyps moved, then the search is done. 
-        finished_hyps = []
+        # if a beam hype emit <EOS>, it joins this list. 
+        # when all hypes moved, then the search is done. 
+        finished_beam_hypes = []
 
         # forward the decoder+attention+generator for each time(token step)
         # for loop-ing w.r.t. time step t.
@@ -499,8 +453,8 @@ class SimpleAttentionNMT(chainer.Chain):
         
         for t in range(max_tgt_length):
             
-            candid_hyps = []
-            for b, hyp in enumerate(beam_hyps):
+            candid_hypes = []
+            for b, hyp in beam_hypes:
                 
                 # input the previously emitted target word
                 if t > 0:
@@ -522,8 +476,7 @@ class SimpleAttentionNMT(chainer.Chain):
                 augmented_vec = self.global_attention(xs_mat, h)
                 pY_t = self.generator(augmented_vec)                                
                 
-                #print("####### For DEBUG: check generator output at t=" + str(t) + " ######")
-                #print("beam hypothesis No. " + str(b))
+                #print("####### For DEBUG: check generator output.######")
                 #print("pY_t is;")
                 #print(type(pY_t))
                 #print(len(pY_t))
@@ -532,31 +485,22 @@ class SimpleAttentionNMT(chainer.Chain):
                 #print("#############")
                 
                 # take the top-k candidates
-                for k in range(beam_size):
+                for k in beam_size:
                     tgt_token_at_t = xp.argmax(pY_t.data)
-                    log_lk = hyp.log_lk + pY_t.data[0][tgt_token_at_t]
+                    log_lk = log_lk + pY_t.data[0][tgt_token_at_t]
                     
                     # deepcopy a new hyp
-                    new_hyp = hyp.copy()
+                    new_hype = hyp.copy()
                     
                     # extend the hypothesis with the emitted word and the new log score
-                    new_hyp.extend(tgt_token_at_t, log_lk)
+                    new_hype.extend(tgt_token_at_t, log_lk)
                     
                     # append the extended hypothesis
-                    candid_hyps.append(new_hyp)
+                    candid_hypes.append(new_hype)
                     
                     # reduce the score for this choice
                     pY_t.data[0][tgt_token_at_t] = -10000000000
                     
-                    #print("####### For DEBUG: check candid extension. at t=" + str(t) + " ######")
-                    #print("beam hypothesis No. " + str(b) + " child No. " + str(k))
-                    #print("log_lk is;")
-                    #print(log_lk)
-                    #print("tgt_token_at_t is:")
-                    #print(tgt_token_at_t)
-                    #print("#############")
-
-
                     ### simple 1-best greedy search            
                     #tgt_token_at_t = xp.argmax(pY_t.data)
                     #log_lk = log_lk + pY_t.data[0][tgt_token_at_t]
@@ -581,47 +525,39 @@ class SimpleAttentionNMT(chainer.Chain):
                     #print("#############")
                     
                 # end b,hyp-enumerate       
-            # end hyp-for
+            # end hype-for
             
-            # sort the candidate hyps by the score, retain bests.
-            num_top = len(beam_hyps)
-            if t == 0:
-                num_top = beam_size
-            top_hyps = self.sortHypotheses(candid_hyps, num_top)
+            # sort the candidate hyps by the score, retain bests.      
+            top_hypes = sortHypothesis(candid_hypes, len(beam_hypes))
                     
             # if the sorted hyp emits EOS, move to the finisehd list. 
-            # otherwise, keep in the beam_hyps
-            beam_hyps = [] # clear
+            # otherwise, keep in the beam_hypes
+            beam_hypes = [] # clear
             for hyp in top_hyps:
-                if hyp.tgt_token_at_t == self.getTgtID("<EOS>"):
-                    finished_hyps.append(hyp)
-                else:
-                    beam_hyps.append(hyp)
-                # end EOS-ifelse
-            # end top_hyps-for
+            if hyp.tgt_token_at_t == self.getTgtID("<EOS>"):
+                finished_hypes.append(hyp)
+            else:
+                beam_hypes.append(hyp)
+            # end EOS-ifelse
             
             # if no hypthesis remains, out the t-loop
-            if len(beam_hyps) < 1:
+            if len(beam_hypes) < 1:
                 break
-            # end if
-            
+           
         # end t-for
-        
+                
         # if still remaining hyps, force return. 
-        if len(beam_hyps) > 0:
+        if len(beam_hypes) > 0:
             for hyp in beam_hyps:
-                finished_hyps.append(hyp)
+                finished_hypes.append(hyp)
             # end hyp-for
         # end len-if
 
         # return the best hypothesis
-        for i, hyp in enumerate(finished_hyps):
-            print("beam result: hypothesis " + str(i)+ ": score=" + str(hyp.log_lk) + ", length=" + str(len(hyp.pred_y)-1))
-
-        best_hyp = self.sortHypotheses(finished_hyps, beam_size)[0]
+        best_hype = sortHypothesis(finished_hypes, 1)[0]
         pred_y = best_hyp.pred_y
         log_lk = best_hyp.log_lk
-        
+
         return pred_y, log_lk
     # end decode_translate_baem-def
 

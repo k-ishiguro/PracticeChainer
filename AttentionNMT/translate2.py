@@ -18,7 +18,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     25/01/2018 (DD/MM/YY)
-# Last update: 28/02/2018 (DD/MM/YY)
+# Last update: 27/02/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 
@@ -61,7 +61,7 @@ from chainer.training import extensions
 from chainer import serializers
 from chainer import cuda
 
-import nmt_model
+import nmt_model2
 
 def convertToWordSequence(vocab_dict, IDseq):
     """
@@ -122,7 +122,7 @@ def main(args):
         (n_layers, src_vocab_dictionary, tgt_vocab_dictionary, w_vec_dim, lstm_dim, dropout, gpu) = pickle.load(fin)
     print("trained model specification " + str(args.modelname) + ".sepc loaded. ")
 
-    model = nmt_model.SimpleAttentionNMT(n_layers, src_vocab_dictionary, tgt_vocab_dictionary, w_vec_dim, lstm_dim, dropout, args.gpu)
+    model = nmt_model2.SimpleAttentionNMT(n_layers, src_vocab_dictionary, tgt_vocab_dictionary, w_vec_dim, lstm_dim, dropout, args.gpu)
     serializers.load_npz(args.modelname+".npz", model)
 
     global xp
@@ -192,7 +192,7 @@ if __name__ == '__main__':
     # translation specs
     parser.add_argument('--max_tgt_len', type=int, default=50,
                         help='Maximum sequence length of translation')
-    parser.add_argument('--beam_size', type=int, default=5,
+    parser.add_argument('--beam_size', type=int, default=1,
                         help='beam size. if 1 then use greedy search')
 
     # computational resources, I/F, outputs
