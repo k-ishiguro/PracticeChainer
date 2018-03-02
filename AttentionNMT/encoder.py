@@ -95,7 +95,7 @@ class Encoder(chainer.Chain):
             self.word_embed = L.EmbedID(in_size=vocab_size, out_size=w_vec_dim, ignore_label=-1)
             self.lstm_layers = L.NStepLSTM(n_layers, w_vec_dim, lstm_dim, dropout=dropout)
             if encoder_type=='brnn':
-                self.lstm_layers = L.NSteopBiLSTM(n_layers, w_vec_dim, lstm_dim//2, dropout=dropout)
+                self.lstm_layers = L.NStepBiLSTM(n_layers, w_vec_dim, lstm_dim//2, dropout=dropout)
             # end-if
 
         # end with
