@@ -12,7 +12,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     08/01/2018 (DD/MM/YY)
-# Last update: 01/03/2018 (DD/MM/YY)
+# Last update: 02/03/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -93,9 +93,13 @@ class Encoder(chainer.Chain):
         with self.init_scope():
 
             self.word_embed = L.EmbedID(in_size=vocab_size, out_size=w_vec_dim, ignore_label=-1)
-            self.lstm_layers = L.NStepLSTM(n_layers, w_vec_dim, lstm_dim, dropout=dropout)
-            if encoder_type=='brnn':
+            if encoder_type=='rnn':
+                self.lstm_layers = L.NStepLSTM(n_layers, w_vec_dim, lstm_dim, dropout=dropout)
+            elif encoder_type=='brnn':                
                 self.lstm_layers = L.NStepBiLSTM(n_layers, w_vec_dim, lstm_dim//2, dropout=dropout)
+            else:
+                print("invalid valie of --encoder_type:" + encoder_type + ": abort. ")
+                assert(1==0)
             # end-if
 
         # end with
