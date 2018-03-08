@@ -13,7 +13,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     13/01/2018 (DD/MM/YY)
-# Last update: 11/02/2018 (DD/MM/YY)
+# Last update: 08/03/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -82,12 +82,13 @@ class GlobalAttention(chainer.Chain):
         # end with
     # end init
 
-    def __call__(self, xs, h):
+    def __call__(self, xs, h, enable_mask):
         """
         compute the context vector.then augment the decoder hidden state with the context vector
 
         :param xs: chainer variable, B by max_seq_len by D numpy array, B-list of sequences of D-dim encoder hidden states, B is the minibatch size
         :param h: chaienr Variable, consists of B by D numpy array, B-list of the decoder hidden state of the focused time step
+        :param enable_mask: B by max_len variable by 1 xp.array, {1,0}-enabling mask
         :return: B-list of augmented decoder hidden sate w/ context vector. B by D*2-dim numpy array,
         """
         B = len(xs)
@@ -100,6 +101,12 @@ class GlobalAttention(chainer.Chain):
         xWh = F.matmul(xs, Wh) # should be B by max_seq_len 
         attention = F.softmax(xWh) # should be B by max_seq_len 
         
+        # enable mask
+        #print(np.shape(enable_mask))
+        #print(np.shape(attention))
+        attention = attention * enable_mask
+        #print(attention)
+
         # weighted sum of xs.
         context_vec = F.sum( F.scale( xs, attention, axis=0 ), axis=1)
                 
@@ -116,7 +123,7 @@ class GlobalAttention(chainer.Chain):
         #print("reshaped Wh is:")
         #print(Wh.dtype)
         #print(np.shape(Wh))
-        #print(Wh[0, 0:5, 0])
+        #print(Wh[:, 0:2, 0])
 
         #print("xs is:")
         #print(xs.dtype)
@@ -126,12 +133,12 @@ class GlobalAttention(chainer.Chain):
         #print("xWh is :")
         #print(xWh.dtype)
         #print(np.shape(xWh))
-        #print(xWh[0, 0:5, 0])
+        #print(xWh)
 
         #print("attention is :")
         #print(attention.dtype)
         #print(np.shape(attention))
-        #print(attention[0, 0:5, 0])
+        #print(attention)
 
         #print("context_vec is")
         #print(context_vec.dtype)

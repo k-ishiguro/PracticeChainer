@@ -9,7 +9,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     14/01/2018 (DD/MM/YY)
-# Last update: 01/03/2018 (DD/MM/YY)
+# Last update: 08/03/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -237,16 +237,18 @@ class SimpleAttentionNMT(chainer.Chain):
         :return: the cross entropy loss on p(Y | X)
         """
 
-        # padding the source sentences
-        padded_src = F.pad_sequence(src, None, -1)
-        # mask for the padding
+        ## padding the source sentences
+        # padded_src = F.pad_sequence(src, None, -1)
+        ## forward the encoder with the entire sequence
+        #hs, cs, xs = self.encoder.forward(padded_src)       
+        #xs_mat = F.stack(xs)
 
         # forward the encoder with the entire sequence
-        hs, cs, xs = self.encoder.forward(padded_src)       
-        # convert xs into a matrix (Variable)
+        hs, cs, xs = self.encoder.forward(src)       
         xs_mat = F.stack(xs)
-
-        # mask the padded elements
+        # generate a mask
+        padded_src = xp.array(F.pad_sequence(src, None, -1).data)
+        enable_src_mask = xp.where( padded_src != -1, 1, 0)[:, :, xp.newaxis]
         
         ### THIS IS A BAD WAY (super slow!!###
         #(B, src_len, ls_dim) = np.shape(xs)
@@ -339,7 +341,7 @@ class SimpleAttentionNMT(chainer.Chain):
             #print("####################")            
 
             # attentino with padding mask
-            augmented_vec = self.global_attention(xs_mat[0:tgt_batch_size], h)
+            augmented_vec = self.global_attention(xs_mat[0:tgt_batch_size], h, enable_src_mask[0:tgt_batch_size])
             
             pY_t = self.generator(augmented_vec)
             #print("####### For DEBUG: attention and generator forward done.######")
@@ -383,10 +385,10 @@ class SimpleAttentionNMT(chainer.Chain):
         hs, cs, xs = self.encoder.forward(src)
         # convert xs into a matrix (Variable)
         xs_mat = F.stack(xs)
-        #(b, src_len, ls_dim) = np.shape(xs) # b should be 1
-        #assert(b == 1)
-        #xs_mat = F.reshape(xs[0].data, (1, src_len, ls_dim))
-                
+        # generate a mask
+        padded_src = xp.array(F.pad_sequence(src, None, -1).data)
+        enable_src_mask = xp.where( padded_src != -1, 1, 0)[:, :, xp.newaxis]
+                        
         # given the encoder states, initialize the decoder. each network memorizes (at most) B rnn histories.
         #self.decoder.reset_state()
         self.decoder.decoder_init(cs, hs)
@@ -418,7 +420,7 @@ class SimpleAttentionNMT(chainer.Chain):
             
             # fed into the decoder, attention, and generator.
             h = self.decoder.onestep_forward(input_token_at_t)
-            augmented_vec = self.global_attention(xs_mat, h)
+            augmented_vec = self.global_attention(xs_mat, h, enable_src_mask)
             pY_t = self.generator(augmented_vec)
             
             #print("####### For DEBUG: check generator output.######")
@@ -480,6 +482,10 @@ class SimpleAttentionNMT(chainer.Chain):
         hs, cs, xs = self.encoder.forward(src)
         # convert xs into a matrix (Variable)
         xs_mat = F.stack(xs)
+        # generate a mask
+        padded_src = xp.array(F.pad_sequence(src, None, -1).data)
+        enable_src_mask = xp.where( padded_src != -1, 1, 0)[:, :, xp.newaxis]
+
         #(b, src_len, ls_dim) = np.shape(xs) # b should be 1
         #assert(b == 1)
         #xs_mat = F.reshape(xs[0].data, (1, src_len, ls_dim))
@@ -529,7 +535,7 @@ class SimpleAttentionNMT(chainer.Chain):
                 
                 # fed into the decoder, attention, and generator.
                 h = hyp.decoder.onestep_forward(input_token_at_t)
-                augmented_vec = self.global_attention(xs_mat, h)
+                augmented_vec = self.global_attention(xs_mat, h, enable_src_mask)
                 pY_t = self.generator(augmented_vec)                                
                 
                 #print("####### For DEBUG: check generator output at t=" + str(t) + " ######")

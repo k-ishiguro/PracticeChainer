@@ -12,7 +12,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     08/01/2018 (DD/MM/YY)
-# Last update: 02/03/2018 (DD/MM/YY)
+# Last update: 07/03/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -52,6 +52,7 @@ import chainer.functions as F
 import chainer.links as L
 from chainer import cuda
 from chainer import training
+from chainer import initializers
 from chainer.training import extensions
 
 class Encoder(chainer.Chain):
@@ -88,6 +89,9 @@ class Encoder(chainer.Chain):
         else:
             xp = np
         # end if-else
+
+        sum_mat = xp.eye( lstm_dim )
+        self.sum_mat = xp.tile(sum_mat, 2).astype(xp.float32)
         
         # init scope for layer (modules) WITH parameters
         with self.init_scope():
@@ -96,7 +100,9 @@ class Encoder(chainer.Chain):
             if encoder_type=='rnn':
                 self.lstm_layers = L.NStepLSTM(n_layers, w_vec_dim, lstm_dim, dropout=dropout)
             elif encoder_type=='brnn':                
-                self.lstm_layers = L.NStepBiLSTM(n_layers, w_vec_dim, lstm_dim//2, dropout=dropout)
+                self.lstm_layers = L.NStepBiLSTM(n_layers, w_vec_dim, lstm_dim, dropout=dropout)
+                self.sum_linear = L.Linear(in_size=2*lstm_dim, out_size=lstm_dim)
+                #self.sum_linear = L.Linear(in_size=2*lstm_dim, out_size=lstm_dim, initialW=initializers.Constant(self.sum_mat))
             else:
                 print("invalid valie of --encoder_type:" + encoder_type + ": abort. ")
                 assert(1==0)
@@ -116,24 +122,35 @@ class Encoder(chainer.Chain):
         '''
         forward computation of the encoder
 
-        :param x: a Chainer Variable, B by max_len_seq numpy arrays, is a B-list of word ID sequences of source inputs (padded with -1), B is a mini-batch size
+        :param x: a Chainer Variable, B-list of len_seq numpy arrays, is a B-list of word ID sequences of source inputs (padded with -1), B is a mini-batch size
         :return:  tuple of (h, c, y)
                    h; all layer's hidden states at the of the sequence. B-list of n_layers by lstm_dim
                    c: all layer's internal cell states at the end of the sequence. B-list of n_layers by lstm_dim
-                   y: top layer's hidden state sequence. B-list of seq_length x lstm_dim lstm_dim (if brnn) numpy array
+                   y: top layer's hidden state sequence. B-list of seq_length x lstm_dim numpy array
         '''
 
         #x_embed = self.word_embed(x)
         x_embed = [ self.word_embed(x_s) for x_s in x  ]
-
-        # x_embed must be a list of Variable, where each Variable corresponds to a sequence ( of embedded vectors)
-        h, c, y = self.lstm_layers(None, None, x_embed) # LSTM stacks. initial states are zero.
-
-        # h; all layer's hidden states at the of the sequence
-        # c: all layer's internal cell states at the end of the sqeucne
-        # y: top layer's hidden state sequence
         
-        return h, c, y
+        # x_embed must be a list of Variable, where each Variable corresponds to a sequence ( of embedded vectors)
+        h, c, y_temp = self.lstm_layers(None, None, x_embed) # LSTM stacks. initial states are zero.
+
+        # h: B-list of all layer's hidden states at the end of the sequence
+        # c: B-list of all layer's internal cell states at the end of the sqeucne
+        # y_temp: B-list of top layer's hidden state sequence
+
+        # for the ease of computation in attention, we want y to be a B-list of "max_len_seq by lstm_dim" matrix. padded y elements should be all zero. --> use pad_sequence. 
+        y = F.pad_sequence(y_temp)
+
+        if self.encoder_type=='rnn':
+            return h, c, y
+        elif self.encoder_type=='brnn':
+            # a genera way of reducing: we "train" how to combine the bi-directional input. 
+            y_half = [ self.sum_linear(y_i) for y_i in y]
+
+            # h and c are difficult for use: imperfect way of use
+            return h[0:self.lstm_dim], c[0:self.lstm_dim], y_half
+        
     # end def
 
 # end Encoder-classs
