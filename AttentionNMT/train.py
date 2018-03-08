@@ -41,7 +41,7 @@ import numpy as np
 # from scipy import sparse
 
 # import numba
-
+import time
 import matplotlib
 
 matplotlib.use('Agg')  # do it background
@@ -174,13 +174,15 @@ def main(args):
     ###
     learning_rate = args.learning_rate
     former_valid_loss = -1234567890.0
+    forward_time = 0
+    backward_time = 0
 
     print("################")
     print("start training...")
     print("################")
     # for each epoch
-    while train_iter.epoch < args.epoch:
-        
+    while train_iter.epoch < args.epoch:                
+
         # iterate training minibatches
         train_batch = train_iter.next()
 
@@ -188,19 +190,27 @@ def main(args):
         src_list, tgt_list = minibatchToListTuple(train_batch, args.gpu)
 
         # compute the loss
+        tick = time.time()
         loss = model.forward_train(src_list, tgt_list)
-
+        forward_time = forward_time + time.time() - tick
+        
         # back-prop by auto differential
+        tick2 = time.time()
         model.cleargrads()
         loss.backward()
         #loss.unchain()
         optimizer.update()
+        backward_time = backward_time + time.time() - tick2
 
         # one-pass through of training data done.
         if train_iter.is_new_epoch:
 
+
             # display training loss
             print('epoch:{:02d} train_loss:{:.04f} '.format(train_iter.epoch, float( loss.data )), end='')
+            print("forward time={:.02f}, backward time={:.02f}, ".format(forward_time, backward_time), end='')
+            forward_time = 0
+            backward_time = 0
             
             # compute a score on validation set
             valid_losses = []

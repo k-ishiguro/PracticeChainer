@@ -239,11 +239,14 @@ class SimpleAttentionNMT(chainer.Chain):
 
         # padding the source sentences
         padded_src = F.pad_sequence(src, None, -1)
+        # mask for the padding
 
         # forward the encoder with the entire sequence
         hs, cs, xs = self.encoder.forward(padded_src)       
         # convert xs into a matrix (Variable)
         xs_mat = F.stack(xs)
+
+        # mask the padded elements
         
         ### THIS IS A BAD WAY (super slow!!###
         #(B, src_len, ls_dim) = np.shape(xs)
@@ -255,8 +258,10 @@ class SimpleAttentionNMT(chainer.Chain):
         ### for debug ###
         #print("####### for DEBUG: Encoder forwarding done.######")
         #print("hs is: ")
-        #print(hs.dtype)
+        #print(type(hs))
         #print(np.shape(hs))
+        #print(type(hs[0]))
+        #print(np.shape(hs[0]))              
         #print("cs is; ")
         #print(cs.dtype)
         #print(np.shape(cs))
@@ -272,11 +277,12 @@ class SimpleAttentionNMT(chainer.Chain):
         #print(xs_mat[0].dtype)
         #print(len(xs_mat[0]))
         #print(len(xs_mat[0][0]))
-        #print(Xp.sum(xs[0][0, :]))
-        #print(Xp.sum(xs_mat[0, 0, :] ) )
+        #print(xp.sum(xs[0][0, :]))
+        #print(xp.sum(xs_mat[0, 0, :] ) )
         #print("####################")
 
         # given the encoder states, initialize the decoder. each network memorizes (at most) B rnn histories.
+        #if self.encoder.encoder_type=='rnn':
         self.decoder.reset_state()
         self.decoder.decoder_init(cs, hs)
         
@@ -299,8 +305,8 @@ class SimpleAttentionNMT(chainer.Chain):
                 BOSID_array = xp.ones(tgt_batch_size) * self.getTgtID("<BOS>")
                 input_tokens_at_t = xp.array(BOSID_array.astype(xp.int32))
             else:
-                tgt_t1 = transposed_tgt[t-1].data.astype(xp.int32)
-                input_tokens_at_t = xp.array(tgt_t1[0:tgt_batch_size])
+                tgt_t1 = transposed_tgt[t-1][0:tgt_batch_size]
+                input_tokens_at_t = xp.array(tgt_t1.data).astype(xp.int32)
             # end if-else
 
             ### for debug ###
@@ -332,7 +338,9 @@ class SimpleAttentionNMT(chainer.Chain):
             #print(np.shape(h))
             #print("####################")            
 
+            # attentino with padding mask
             augmented_vec = self.global_attention(xs_mat[0:tgt_batch_size], h)
+            
             pY_t = self.generator(augmented_vec)
             #print("####### For DEBUG: attention and generator forward done.######")
             #print("augmented_vec is: ")

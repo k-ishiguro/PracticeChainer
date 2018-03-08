@@ -120,6 +120,8 @@ def main(args):
     ###
     with open(args.modelname + ".spec", mode='rb') as fin:
         (n_layers, src_vocab_dictionary, tgt_vocab_dictionary, w_vec_dim, lstm_dim, encoder_type, dropout, gpu) = pickle.load(fin)
+        #(n_layers, src_vocab_dictionary, tgt_vocab_dictionary, w_vec_dim, lstm_dim, dropout, gpu) = pickle.load(fin)
+        #encoder_type = 'rnn'
     print("trained model specification " + str(args.modelname) + ".sepc loaded. ")
 
     model = nmt_model.SimpleAttentionNMT(n_layers, src_vocab_dictionary, tgt_vocab_dictionary, w_vec_dim, lstm_dim, encoder_type, dropout, args.gpu)
@@ -140,7 +142,7 @@ def main(args):
     ###
 
     print("##################")
-    print("#start translatoin")
+    print("#start translation")
     print("##################")
     snt_id = -1
     with open(args.src, 'r') as fin, open(args.out_name, 'w') as fout:
