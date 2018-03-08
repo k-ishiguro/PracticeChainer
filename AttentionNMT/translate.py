@@ -155,8 +155,10 @@ def main(args):
             src_IDseq = convertToIDSequence(src_vocab_dictionary, src_line)
 
             # translate
-            tgt_IDseq, log_lk = model.decode_translate_beam(src_IDseq, args.max_tgt_len, args.beam_size)
-            #tgt_IDseq, log_lk = model.decode_translate_greedy(src_IDseq, args.max_tgt_len)
+            if args.beam_size > 1:
+                tgt_IDseq, log_lk = model.decode_translate_beam(src_IDseq, args.max_tgt_len, args.beam_size)
+            else:
+                tgt_IDseq, log_lk = model.decode_translate_greedy(src_IDseq, args.max_tgt_len)
             
             # convert back to the target words
             tgt_line = convertToWordSequence(tgt_vocab_dictionary, tgt_IDseq)

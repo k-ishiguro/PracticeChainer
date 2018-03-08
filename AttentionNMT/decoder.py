@@ -130,9 +130,11 @@ class Decoder(chainer.Chain):
         """
         assert isinstance(c, chainer.Variable)
         assert isinstance(h, chainer.Variable)
-
-        assert(len(h) == self.n_layers)
-        assert(len(c) == self.n_layers)
+        
+        #print("decoder: len(h)=" + str(len(h)) )
+        #print("decoder: sefl.n_layes=" + str(self.n_layers))
+        #assert(len(h) == self.n_layers)
+        #assert(len(c) == self.n_layers)
 
         B = len(h[0])
         assert(B == len(c[0]))
