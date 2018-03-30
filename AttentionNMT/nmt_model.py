@@ -120,7 +120,7 @@ class SimpleAttentionNMT(chainer.Chain):
         # get the scores
         log_lks = np.zeros(len(hyps))
         for i, h in enumerate(hyps):
-            log_lks[i] = h.log_lk
+            log_lks[i] = h.log_lk / (len(h.pred_y)-1)
         
         # sort by scores
         sorted_idx = np.argsort(log_lks)[::-1]
@@ -212,7 +212,11 @@ class SimpleAttentionNMT(chainer.Chain):
         # end with
 
         print("nmt_model.SimpleAttentionNMT is initialized")
-        print("Encoder=Stacked LSTM, Decoder=Stacked LSTM, Attention=GlobalAttention, Generator=Generator")
+        if encoder_type=='rnn':
+            print("Encoder=Stacked LSTM, Decoder=Stacked LSTM, Attention=GlobalAttention, Generator=Generator")
+        elif encoder_type=='brnn':
+            print("Encoder=Stacked BiDirectional LSTM, Decoder=Stacked LSTM, Attention=GlobalAttention, Generator=Generator")
+        # end if
         print("number of stacked LSTM layers(src)=" + str(n_layers) )
         print("number of stacked LSTM layers(tgt)=" + str(n_layers) )
         print("word_embedding dimension=" + str(w_vec_dim) + ", lstm hiddne unit dimension=" + str(lstm_dim) )
@@ -298,17 +302,17 @@ class SimpleAttentionNMT(chainer.Chain):
 
         # for loop-ing w.r.t. time step t.
         for t in range(max_len_seq):
-            tgt_tokens_at_t = transposed_tgt[t]
-            #tgt_tokens_at_t = xp.array(transposed_tgt[t].data.astype(xp.int32))
 
+            tgt_tokens_at_t = transposed_tgt[t]            
             tgt_batch_size = len(tgt_tokens_at_t)
 
             if t==0:
                 BOSID_array = xp.ones(tgt_batch_size) * self.getTgtID("<BOS>")
-                input_tokens_at_t = xp.array(BOSID_array.astype(xp.int32))
+                input_tokens_at_t = chainer.Variable(xp.array(BOSID_array.astype(xp.int32)))
             else:
-                tgt_t1 = transposed_tgt[t-1][0:tgt_batch_size]
-                input_tokens_at_t = xp.array(tgt_t1.data).astype(xp.int32)
+                #tgt_t1 = transposed_tgt[t-1][0:tgt_batch_size]
+                #input_tokens_at_t = xp.array(tgt_t1.data).astype(xp.int32)
+                input_tokens_at_t = transposed_tgt[t-1][0:tgt_batch_size]
             # end if-else
 
             ### for debug ###
@@ -388,7 +392,7 @@ class SimpleAttentionNMT(chainer.Chain):
         # generate a mask
         padded_src = xp.array(F.pad_sequence(src, None, -1).data)
         enable_src_mask = xp.where( padded_src != -1, 1, 0)[:, :, xp.newaxis]
-                        
+
         # given the encoder states, initialize the decoder. each network memorizes (at most) B rnn histories.
         #self.decoder.reset_state()
         self.decoder.decoder_init(cs, hs)
@@ -632,7 +636,7 @@ class SimpleAttentionNMT(chainer.Chain):
 
         # return the best hypothesis
         for i, hyp in enumerate(finished_hyps):
-            print("beam result: hypothesis " + str(i)+ ": score=" + str(hyp.log_lk) + ", length=" + str(len(hyp.pred_y)-1))
+            print("beam result: hypothesis " + str(i)+ ": score=" + str(hyp.log_lk) + ", length=" + str(len(hyp.pred_y)-1) + ", normalized score=" + str(hyp.log_lk / (len(hyp.pred_y)-1)) )
 
         best_hyp = self.sortHypotheses(finished_hyps, beam_size)[0]
         pred_y = best_hyp.pred_y

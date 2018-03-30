@@ -145,11 +145,14 @@ class Encoder(chainer.Chain):
         if self.encoder_type=='rnn':
             return h, c, y
         elif self.encoder_type=='brnn':
-            # a genera way of reducing: we "train" how to combine the bi-directional input. 
+            # a general way of reducing: we "train" how to combine the bi-directional input. 
             y_half = [ self.sum_linear(y_i) for y_i in y]
 
+            print(h[:,0,0:10])
+            print(y[:,0,0:10])
+            print(np.shape(h[:,:,0:self.lstm_dim]))
             # h and c are difficult for use: imperfect way of use
-            return h[0:self.lstm_dim], c[0:self.lstm_dim], y_half
+            return h[:,:,0:self.lstm_dim], c[:,:,0:self.lstm_dim], y_half
         
     # end def
 
