@@ -12,7 +12,7 @@
 #
 # License:     All rights reserved unless specified.
 # Created:     08/01/2018 (DD/MM/YY)
-# Last update: 07/03/2018 (DD/MM/YY)
+# Last update: 31/03/2018 (DD/MM/YY)
 #-------------------------------------------------------------------------------
 
 import io
@@ -83,6 +83,8 @@ class Encoder(chainer.Chain):
         self.lstm_dim = lstm_dim
         self.encoder_type = encoder_type
         
+        #self.DEBUG_BRNN = DEBUG_BRNN
+        
         global xp
         if gpu >= 0:
             xp = cuda.cupy
@@ -135,24 +137,24 @@ class Encoder(chainer.Chain):
         # x_embed must be a list of Variable, where each Variable corresponds to a sequence ( of embedded vectors)
         h, c, y_temp = self.lstm_layers(None, None, x_embed) # LSTM stacks. initial states are zero.
 
-        # h: B-list of all layer's hidden states at the end of the sequence
-        # c: B-list of all layer's internal cell states at the end of the sqeucne
+        # h: num_layer (or num_layer*2 for BRNN) by B-list of the final hidden states of the sequence
+        # c: num_layer (or num_layer+2 for BRNN) by B-list of the final cell states at the end of the sqeucne
         # y_temp: B-list of top layer's hidden state sequence
 
         # for the ease of computation in attention, we want y to be a B-list of "max_len_seq by lstm_dim" matrix. padded y elements should be all zero. --> use pad_sequence. 
         y = F.pad_sequence(y_temp)
 
-        if self.encoder_type=='rnn':
+        if self.encoder_type=='rnn':            
             return h, c, y
         elif self.encoder_type=='brnn':
             # a general way of reducing: we "train" how to combine the bi-directional input. 
             y_half = [ self.sum_linear(y_i) for y_i in y]
 
-            print(h[:,0,0:10])
-            print(y[:,0,0:10])
-            print(np.shape(h[:,:,0:self.lstm_dim]))
             # h and c are difficult for use: imperfect way of use
-            return h[:,:,0:self.lstm_dim], c[:,:,0:self.lstm_dim], y_half
+            h_half = h[0::2, :,:] + h[1::2, :, :]
+            c_half = c[0::2, :,:] + c[1::2, :, :]
+            
+            return h_half, c_half, y_half
         
     # end def
 

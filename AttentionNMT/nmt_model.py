@@ -120,7 +120,7 @@ class SimpleAttentionNMT(chainer.Chain):
         # get the scores
         log_lks = np.zeros(len(hyps))
         for i, h in enumerate(hyps):
-            log_lks[i] = h.log_lk / (len(h.pred_y)-1)
+            log_lks[i] = h.log_lk / max( (len(h.pred_y)-1), 1 )
         
         # sort by scores
         sorted_idx = np.argsort(log_lks)[::-1]
@@ -200,6 +200,7 @@ class SimpleAttentionNMT(chainer.Chain):
         with self.init_scope():
             # ID sequences are fed into the encoder, hidden vector sequences are emitted.
             self.encoder = encoder.Encoder(n_layers, self.src_vocab_size, w_vec_dim, lstm_dim, encoder_type, dropout, gpu)
+            #self.encoder = encoder.Encoder(n_layers, self.src_vocab_size, w_vec_dim, lstm_dim, encoder_type, DEBUG_BRNN, dropout, gpu)
 
             # ID sequences and encoder hidden vector sequences are fed into the decoder, hidden vector sequences are emitted
             self.decoder = decoder.Decoder(n_layers, self.tgt_vocab_size, w_vec_dim, lstm_dim, gpu)

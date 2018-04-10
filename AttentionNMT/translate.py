@@ -188,6 +188,7 @@ if __name__ == '__main__':
                         help="a text file with source input sentences")
     parser.add_argument('-out_name', type=str, required=True,
                         help='Translation output file name')
+    parser.add_argument('--DEBUG_BRNN', type=int, default=0)
     
     # output specs
     parser.add_argument('--detailed_output', action='store_true', default=False,

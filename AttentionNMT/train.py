@@ -198,13 +198,11 @@ def main(args):
         tick2 = time.time()
         model.cleargrads()
         loss.backward()
-        #loss.unchain()
         optimizer.update()
         backward_time = backward_time + time.time() - tick2
-
+        
         # one-pass through of training data done.
         if train_iter.is_new_epoch:
-
 
             # display training loss
             print('epoch:{:02d} train_loss:{:.04f} '.format(train_iter.epoch, float( loss.data )), end='')
@@ -287,7 +285,7 @@ if __name__ == '__main__':
                         help='Discount decaying ratio of learning rate')
     parser.add_argument('--learning_rate_decay_start', type=int, default=10,
                         help='Epoch of decay starting')
-    parser.add_argument('--dropout', type=float, default=0.1,
+    parser.add_argument('--dropout', type=float, default=0.5,
                         help='Dropout ratio throughout the network')
 
     # translation specs
